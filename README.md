@@ -19,3 +19,37 @@ METACARPA is compiled as a static Linux x64 executable. Running it should be as 
 ### Compilation
 
 The src directory contains a single source file and Makefile. The [Makefile](src/Makefile) is written for a specific environment and is not deployment-ready. If you plan to try and compile METACARPA, you will need to change at least the first three lines of the Makefile to add custom compiler paths. Please note that you will also need a copy of the [Boost](http://www.boost.org) mathematical libraries on your machine (the binaries were compiled using Boost 1.55.0).
+
+## Running
+
+Here is a short summary of METACARPA's options. 
+```
+METACARPA ( μ - 🐟  ): Meta-analysis in C++ Accounting for Relatedness using arbitrary Precision Arithmetic.
+===========================================================================================================
+
+        NB: All arguments mandatory except column arguments.
+        MATACARPA currently supports only one header line.
+
+Options description :
+  --help                This help message.
+  -I [ --input ] arg    Input file.
+  -O [ --output ] arg   Output file.
+  -t [ --sep ] arg      Input field separator. Don't forget to quote if 
+                        necessary. Output field separator is always \t.
+  -c [ --chr-col ] arg  1-based p-value column number.
+  -q [ --pos-col ] arg  1-based position column number.
+  -a [ --all-col ] arg  1-based column number for effect or reference allele.
+  -r [ --rsid-col ] arg 1-based column number for RSID or any other column that
+                        you want to keep.
+  -p [ --pval-col ] arg 1-based p-value column number.
+  -b [ --beta-col ] arg 1-based beta column number.
+  -s [ --se-col ] arg   1-based beta-SE column number.
+  -n [ --size-col ] arg 1-based sample size column (if absent, sample sizes 
+                        will be assumed constant and should be appended to 
+                        input file names using a comma : -I 
+                        [FILENAME],[SAMPLE_SIZE]).
+  -i [ --id-col ] arg   1-based ID column number (must be unique - e.g. 
+                        chr:pos-A1-A2). If absent, chr:pos will be used.
+  -m [ --matrix ] arg   Path to a METACARPA-generated correlation matrix array.
+
+```
