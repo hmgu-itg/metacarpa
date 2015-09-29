@@ -1132,7 +1132,7 @@ int main(int argc, char* argv[])
         // ord.p=1-cdf(correctednormal_p, -1*abs(ord.z));
       //ord.p=1-cdf(correctednormal_p, ord.z);
         // ord.p_uncorrected=1-cdf(wald_p, -1*abs(ord.z));
-      ord.p=2*(cdf(correctednormal, -1*abs(ord.z)));
+      ord.p=2*(cdf(correctednormal, -1*abs(static_cast<long double>(ord.z))));
       //ord.p_uncorrected=2*(1-cdf(wald_p, abs(ord.z)));
       ord.p_wald=2*cdf(wald_p, -1*abs(ord.beta/ord.betase));
       ord.p_fess=2*cdf(wald_p, -1*abs(ord.z_fess));
