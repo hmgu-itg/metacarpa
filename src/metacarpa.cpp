@@ -653,7 +653,7 @@ struct output_record
     // assumes that ofs is open in text append mode. If not, horrible things will happen.
     if(!ofs.is_open()){error("Internal: output file is not open.");exit(1);}
     string s(status.begin(), status.end());
-    ofs << rsid <<"\t"+chrpos << "\t"+s+"\t" <<vtostring<unsigned short int>(studies)<< "\t"+to_string(beta)+"\t"+to_string(betase)+"\t"<<z<<"\t"<<zse<<"\t"<<p_uncorrected<<"\t"<<p_wald<<"\t"<<p<<"\t"<<p_fess<<"\n";
+    ofs << rsid <<"\t"+chrpos << "\t"+s+"\t" <<vtostring<unsigned short int>(studies)<< "\t"+to_string(beta)+"\t"+to_string(betase)+"\t"<<z<<"\t"<<zse<<"\t"<<p_wald<<"\t"<<p<<"\t"<<p_fess<<"\n";
   }
 
 };
@@ -686,13 +686,13 @@ int inline initialise(int argc, char* argv[]){
  RAND_ID=rand() % 1000 + 1989; // I was born that year and expect to live around 1000 years.
 
   
-  po::options_description desc("METACARPA ( μ - 🐟  ): Meta-analysis in C++ Accounting for Relatedness using arbitrary Precision Arithmetic.\n===========================================================================================================\n\n\tNB: All arguments mandatory except column arguments.\n\tMATACARPA currently supports only one header line.\n\nOptions description ");
+  po::options_description desc("METACARPA ( μ - 🐟  ): Meta-analysis in C++ Accounting for Relatedness using arbitrary Precision Arithmetic.\n===========================================================================================================\n\n\tNB: All arguments mandatory except column and -m arguments.\n\tMETACARPA currently supports only one header line in input files, which is ignored.\n\nOptions description ");
   desc.add_options()
   ("help", "This help message.")
   ("input,I", po::value<vector <string>>(), "Input file.")
   ("output,O", po::value<string>(), "Output file.")
   ("sep,t", po::value<char>(), "Input field separator. Don't forget to quote if necessary. Output field separator is always \\t.")
-  ("chr-col,c", po::value<int>(), "1-based p-value column number.")
+  ("chr-col,c", po::value<int>(), "1-based chromosome column number.")
   ("pos-col,q", po::value<int>(), "1-based position column number.")
   ("all-col,a", po::value<int>(), "1-based column number for effect or reference allele.")
   ("rsid-col,r", po::value<int>(), "1-based column number for RSID or any other column that you want to keep.")
@@ -831,6 +831,8 @@ int main(int argc, char* argv[])
   std::vector<string> currentPos;
   std::vector<long double> currentPval;
   std::vector<long double> currentBeta;
+    vector<long double> currentBetaSe;
+  vector<string> currentRs;
     // Go to the first non-header line for all files and read the position and p-value
   i=0;
   for(auto& s : filestreams) {
@@ -845,7 +847,9 @@ int main(int argc, char* argv[])
       counts[i]=1;
       currentPos.push_back(line.at(CHR_COL)+":"+line.at(POS_COL));
       currentPval.push_back(stold(line[PVAL_COL]));
+      currentBetaSe.push_back(stold(line[SE_COL]));
       currentBeta.push_back(stold(line[BETA_COL]));
+      currentRs.push_back(line[RSID_COL]);
     } catch(exception e){
       error("Impossible to parse first line of file ", ifiles[i], "\n\tCheck separator and column numbers for chromosome, position and p-value (", line.size(),")");
     }
@@ -875,7 +879,7 @@ int main(int argc, char* argv[])
         //info("j=",j);
         //correlations.add_minimum(currentPos[j],currentPval[j],pow(2,j));
         correlations.add_minimum_beta(currentPos[j],currentBeta[j],pow(2,j));
-        if(!getline(*(filestreams[j]), tempLine, '\n')){currentPos[j]="30:1"; info("Read",counts[j], "lines from file", ifiles[j],".");eofs[j]=true;continue;}
+        if(!getline(*(filestreams[j]), tempLine, '\n')){currentPos[j]="30:1"; info("Read ",counts[j], " lines from file ", ifiles[j],".");eofs[j]=true;continue;}
         
         std::vector <string> line;
         try{
@@ -884,6 +888,8 @@ int main(int argc, char* argv[])
           currentPos[j]=line.at(CHR_COL)+":"+line.at(POS_COL);
           currentPval[j]=stold(line[PVAL_COL]);
           currentBeta[j]=stold(line[BETA_COL]);
+          currentBetaSe[j]=stold(line[SE_COL]);
+          currentRs[j]=line[RSID_COL];
           //cout << "update \t";
           //std::copy(currentPos.begin(), currentPos.end(), std::ostream_iterator<string>(std::cout, " "));
           //cout << "iterator "<<j<<"\n";
@@ -947,7 +953,7 @@ int main(int argc, char* argv[])
   vector <int> weights_p (ifiles.size());
   currentPos.clear();
   currentPval.clear();
-  vector<long double> currentBetaSe;
+
   string id;
 
   for(auto& s : filestreams) {
@@ -957,12 +963,15 @@ int main(int argc, char* argv[])
     getline(*s, tempLine, '\n');
     std::vector <string> line;
     try{
+
+      // for each input file, we store all the vital info (p-values, pos, etc) in arrays
       line=parse_tab(tempLine, SEP);
       counts[i]=1;
       currentPos.push_back(line.at(CHR_COL)+":"+line.at(POS_COL));
       currentPval.push_back(stold(line[PVAL_COL]));
       currentBetaSe.push_back(stold(line[SE_COL]));
       currentBeta.push_back(stold(line[BETA_COL]));
+      currentRs.push_back(line[RSID_COL]);
       id=line[RSID_COL];
       // weights_p actually contain sample sizes, not weights.
       // This is because in the loop that follows, dividends are not known beforehand.
@@ -975,6 +984,7 @@ int main(int argc, char* argv[])
   }
   i=0;
 
+  // Then we compute the smallest position
   min= min_element(currentPos.begin(),currentPos.end(),rsid_comparator);
   minimum=*min;
 
@@ -985,6 +995,9 @@ int main(int argc, char* argv[])
 
   // Single-point analysis.
   ofstream ofs (OUTFILE, ios::out | ios::app);
+  // Write headers
+  //ofs << rsid <<"\t"+chrpos << "\t"+s+"\t" <<vtostring<unsigned short int>(studies)<< "\t"+to_string(beta)+"\t"+to_string(betase)+"\t"<<z<<"\t"<<zse<<"\t"<<p_wald<<"\t"<<p<<"\t"<<p_fess<<"\n";
+  ofs<<"rsid\tchr:pos\teffects\tbeta\tse\tz\tz_se\tp_wald\tp_corrected\tp_stouffer\n";
   poscount=0;
   while(1){
     poscount++;
@@ -995,27 +1008,33 @@ int main(int argc, char* argv[])
     vector<long double> working_betase;
     vector<long double> working_betas;
     std::vector<string> working_rs;
+    std::vector<string> working_id;
     unsigned int working_mask=0;
 
     output_record ord;
-    ord.rsid=id;
+    //ord.rsid=id;
     for(unsigned short int j=0;j<currentPos.size();j++){
-      // look for the minimum in the vector.
+      // iterate trough the cursors at every file
+      // look for the minimum determined earlier
       // When found, convert p-value
       // add to data structure
       //advance file
       if(currentPos[j]==minimum){
         string tempLine;
-        // add relevant information to data structures corresponding to minimal positions
+        // for each of the cursors that are standing at the minimum
+        // push the subset of the vital infos into the "working" arrays
         working_ps.push_back(currentPval[j]);
         working_weights.push_back(weights_p[j]);
         working_rs.push_back(currentPos[j]);
         working_betase.push_back(currentBetaSe[j]);
         working_betas.push_back(currentBeta[j]);
+        working_id.push_back(currentRs[j]);
+        //ord.rsid=currentRs[j];
         working_mask|=(unsigned short int)(pow(2,j));
-        if(!getline(*(filestreams[j]), tempLine, '\n')){currentPos[j]="30:1"; info("Read",counts[j], "lines from file", ifiles[j],".");eofs[j]=true;continue;}
+        if(!getline(*(filestreams[j]), tempLine, '\n')){currentPos[j]="30:1"; info("Read ",counts[j], "lines from file", ifiles[j],".");eofs[j]=true;continue;}
         
         std::vector <string> line;
+        // the following block advances the selected file only (since we have treated the current minimum)
         try{
           counts[j]++;
           line=parse_tab(tempLine, SEP);
@@ -1023,6 +1042,7 @@ int main(int argc, char* argv[])
           currentPval[j]=stold(line[PVAL_COL]);
           currentBetaSe[j]=stold(line[SE_COL]);
           currentBeta[j]=stold(line[BETA_COL]);
+          currentRs[j]=line[RSID_COL];
           id=line[RSID_COL];
           weights_p[j]=SIZE_COL>-1?stoi(line[SIZE_COL]) : sample_sizes[j];
           //cout << "update \t";
@@ -1036,6 +1056,7 @@ int main(int argc, char* argv[])
       }
     }
     ord.chrpos=working_rs[0];
+    ord.rsid=working_id[0];
     unsigned int j=0;
     for(unsigned short int i=0; i<ifiles.size();i++){
       if((working_mask & (1<<i)) == 0){
@@ -1132,7 +1153,7 @@ int main(int argc, char* argv[])
         // ord.p=1-cdf(correctednormal_p, -1*abs(ord.z));
       //ord.p=1-cdf(correctednormal_p, ord.z);
         // ord.p_uncorrected=1-cdf(wald_p, -1*abs(ord.z));
-      ord.p=2*(cdf(correctednormal, -1*abs(static_cast<long double>(ord.z))));
+      ord.p=2*(cdf(correctednormal, -1*abs(ord.z)));
       //ord.p_uncorrected=2*(1-cdf(wald_p, abs(ord.z)));
       ord.p_wald=2*cdf(wald_p, -1*abs(ord.beta/ord.betase));
       ord.p_fess=2*cdf(wald_p, -1*abs(ord.z_fess));
@@ -1157,6 +1178,7 @@ int main(int argc, char* argv[])
   working_rs.clear();
   working_betas.clear();
   working_betase.clear();
+  working_id.clear();
 
 
   min= min_element(currentPos.begin(),currentPos.end(),rsid_comparator);
@@ -1323,7 +1345,7 @@ scr.read("test_serial");
 info(scr.getmat((unsigned short int)3));
 */
 info("All done.");
-info("METACARPA ( μ - 🐟  ) swimming away.");
+info("METACARPA ( μ - 🎏 ) swimming away.");
 info("Goodbye.");
 
 return 0;
