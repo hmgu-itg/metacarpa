@@ -617,19 +617,19 @@ inline string vtostring(std::vector<T> v){
 
 struct cmp_rsid{
 
-bool operator()(const string &a, const string &b) const
- {
-  int achr=(a.at(1) == ':' ? a.at(0)- '0' : stoi(a.substr(0,2)));
-  int bchr=(b.at(1) == ':' ? b.at(0)- '0' : stoi(b.substr(0,2)));
-  if(achr<bchr){return(true);}
-  if(achr>bchr){return(false);}
-  long int apos;
-  long int bpos;
+  bool operator()(const string &a, const string &b) const
+  {
+    int achr=(a.at(1) == ':' ? a.at(0)- '0' : stoi(a.substr(0,2)));
+    int bchr=(b.at(1) == ':' ? b.at(0)- '0' : stoi(b.substr(0,2)));
+    if(achr<bchr){return(true);}
+    if(achr>bchr){return(false);}
+    long int apos;
+    long int bpos;
 
-  apos=(achr>9? stol(a.substr(3)):stol(a.substr(2))); 
-  bpos=(bchr>9? stol(b.substr(3)):stol(b.substr(2)));
-  return(apos < bpos);
-}
+    apos=(achr>9? stol(a.substr(3)):stol(a.substr(2))); 
+    bpos=(bchr>9? stol(b.substr(3)):stol(b.substr(2)));
+    return(apos < bpos);
+  }
 }rsid_comparator;
 
 struct output_record
@@ -660,6 +660,149 @@ struct output_record
 
 };
 
+bool VERBOSE=false;
+
+inline void meta_analyse(std::vector<string> working_id, std::vector<string> working_rs, std::vector<string> working_a1, std::vector<string> working_a2, std::vector<long double> working_ps, std::vector<long double> working_betas, std::vector<long double> working_betase, std::vector<long double> working_weights, unsigned short int working_mask, unsigned short int numstudies, studies_correlation correlations, ofstream& ofs){
+  if(VERBOSE){
+    cout << "Got working_id=";
+    for (auto i: working_id)
+      std::cout << i << ' ';
+    cout << "\nGot working_rs=" ;
+    for (auto i: working_rs)
+      std::cout << i << ' ';
+    cout << "\nGot working_a1=" ;
+    for (auto i: working_a1)
+      std::cout << i << ' ';
+    cout << "\nGot working_a2=" ;
+    for (auto i: working_a2)
+      std::cout << i << ' ';
+    cout << "\nGot working_ps=" ;
+    for (auto i: working_ps)
+      std::cout << i << ' ';
+    cout << "\nGot working_betas=" ;
+    for (auto i: working_betas)
+      std::cout << i << ' ';
+    cout << "\nGot working_betase=" ;
+    for (auto i: working_betase)
+      std::cout << i << ' ';
+    cout << "\nGot working_weights=" ;
+    for (auto i: working_weights)
+      std::cout << i << ' ';
+    cout << "\nGot working_mask=" << working_mask << "\n";
+    cout << "Got numstudies=" << numstudies << "\n";
+  }
+
+  output_record ord;
+  ord.chrpos=working_rs[0];
+  ord.rsid=working_id[0];
+  ord.a1=working_a1[0];
+  ord.a2=working_a2[0];
+
+  unsigned int j=0;
+  for(unsigned short int i=0; i<numstudies;i++){
+    if((working_mask & (1<<i)) == 0){
+      ord.status.push_back('?');
+    }else{
+      //if((mask & mask-1)==0){error("mask is a power of two: "+to_string(mask)+" whereas i="+to_string(i)+" and maskcheck is "+to_string(1<<i));}
+      char effect_dir=working_betas[j] > 0? '+' : '-';
+      j++;
+      ord.status.push_back(effect_dir);
+    }
+  }
+  if(bit_count(working_mask)>1)
+  {
+      // compute weights
+    int sum_ss=somme(working_weights);
+    int i=0;
+      //for(long double l : working_weights){working_weights[i]/=sum_ss;i++;}
+
+    for(long double l : working_weights){working_weights[i]=sqrt(working_weights[i]);working_weights[i]/=sqrt(sum_ss);i++;}
+
+
+      // compute transforms and sum thereof
+      i=0;
+    vector<cpp_dec_float_50> zs(working_weights.size());
+    vector<cpp_dec_float_50> zs_fess(working_weights.size());
+    for(long double l : working_ps){
+      zs[i]=z_transform_fess(working_ps[i], working_betas[i],working_rs[i]);
+      zs_fess[i]=z_transform_fess(working_ps[i], working_betas[i],working_rs[i]);
+      i++;
+    }
+    ord.z=somme(produit(zs, working_weights));
+
+
+    ord.z_fess=somme(produit(zs_fess, working_weights));
+      // compute p-value SD
+      // the first product in the line below sums to 1 by definition
+      //ord.zse=sqrt(somme(produit(working_weights, working_weights))+produit_reciproque_asymetrique(correlations.getmat(working_mask), working_weights));
+    ord.zse=sqrt(1+produit_reciproque_asymetrique(correlations.getmat(working_mask), working_weights));
+
+
+      //compute matrix for beta weights
+      //info("Working mask ", working_mask);
+    ublas::matrix<long double> c=correlations.getmat(working_mask);
+    for(i=0;i<c.size1();i++){
+      for(unsigned short int j=0;j<c.size1();j++){
+        if(i>j){c(i,j)=c(j,i);}else if (i==j){c(i,j)=1;}
+        c(i,j)=c(i,j)*working_betase[i]*working_betase[j];
+      }
+    }
+      // calculate weights
+      //    * sum of columns/total sum of matrix
+    ublas::matrix<long double> inverse(c.size1(),c.size1());
+
+    if(!InvertMatrix(c,inverse)){correlations.print(c);error("Could not invert variance/covariance matrix.");}
+
+    working_weights=colsum(inverse);
+    long double totsum=somme(working_weights);
+    for(i=0;i<working_weights.size();i++) working_weights[i]/=totsum;
+
+      // calculate betase
+      std::vector<long double> working_var=produit(working_betase, working_betase);
+    ord.betase=sqrt(somme(produit(produit(working_weights, working_weights), working_var)) + produit_reciproque_asymetrique(c, working_weights));
+
+      // meta-beta
+    ord.beta=somme(produit(working_weights, working_betas));
+          // compute meta-analysis p-value
+    boost::math::normal_distribution<long double>  correctednormal(0.0, ord.zse);
+    boost::math::normal_distribution<cpp_dec_float_50>  correctednormal_p(0.0, ord.zse);
+    boost::math::normal_distribution<long double>  wald(0.0, 1);
+    boost::math::normal_distribution<cpp_dec_float_50>  wald_p(0.0, 1);
+
+    try{
+     ord.p=2*(cdf(correctednormal, -1*abs(static_cast<long double>(ord.z))));
+     ord.p_fess=2*cdf(wald, -1*abs(static_cast<long double>(ord.z_fess)));
+     ord.p_wald=2*cdf(wald, -1*abs(ord.beta/ord.betase));
+     if(ord.p==0){
+       ord.p_wald=2*cdf(wald_p, -1*abs(ord.beta/ord.betase));
+       ord.p=2*(cdf(correctednormal_p, -1*abs(ord.z)));
+       ord.p_fess=2*cdf(wald_p, -1*abs(ord.z_fess));
+
+     }
+   } catch(exception e){
+    ord.p=2*(cdf(correctednormal, -1*abs(ord.z)));
+    ord.p_wald=2*cdf(wald_p, -1*abs(ord.beta/ord.betase));
+    ord.p_fess=2*cdf(wald_p, -1*abs(ord.z_fess));
+  }
+
+}
+else {
+      // SNP present in only 1 study, skip all calculations
+  ord.rsid=working_id[0];
+  ord.beta=working_betas[0];
+  ord.betase=working_betase[0];
+  ord.p=-1;
+  ord.p_wald=-1;
+  ord.p_fess=-1;
+  ord.z=-1;
+  ord.zse=-1;
+  ord.p_uncorrected=-1;
+  ord.a1=working_a1[0];
+  ord.a2=working_a2[0];
+}
+ord.print(ofs);
+}
+
 
 char SEP='\t';
 int PVAL_COL=13;
@@ -689,136 +832,142 @@ int inline initialise(int argc, char* argv[]){
   std::srand(std::time(0));
  RAND_ID=rand() % 1000 + 1989; // I was born that year and expect to live around 1000 years.
 
-  
-  po::options_description desc("METACARPA ( μ - 🐟  ): Meta-analysis in C++ Accounting for Relatedness using arbitrary Precision Arithmetic.\n===========================================================================================================\n\n\tNB: All arguments mandatory except column and -m arguments.\n\tMETACARPA currently supports only one header line in input files, which is ignored.\n\nOptions description ");
-  desc.add_options()
-  ("help", "This help message.")
-  ("input,I", po::value<vector <string>>(), "Input file.")
-  ("output,O", po::value<string>(), "Output file.")
-  ("sep,t", po::value<char>(), "Input field separator. Don't forget to quote if necessary. Output field separator is always \\t.")
-  ("chr-col,c", po::value<int>(), "1-based chromosome column number.")
-  ("pos-col,q", po::value<int>(), "1-based position column number.")
-  ("a1-col,u", po::value<int>(), "1-based column number for effect or reference allele.")
-  ("a2-col,v", po::value<int>(), "1-based column number for other allele.")
-  ("rsid-col,r", po::value<int>(), "1-based column number for RSID or any other column that you want to keep.")
-  ("pval-col,p", po::value<int>(), "1-based p-value column number.")
-  ("beta-col,b", po::value<int>(), "1-based beta column number.")
-  ("se-col,s", po::value<int>(), "1-based beta-SE column number.")
-  ("size-col,n", po::value<int>(), "1-based sample size column (if absent, sample sizes will be assumed constant and should be appended to input file names using a comma : -I [FILENAME],[SAMPLE_SIZE]).")
-  ("id-col,i", po::value<int>(), "1-based ID column number (must be unique - e.g. chr:pos-A1-A2). If absent, chr:pos will be used.")
-  ("matrix,m", po::value<string>(), "Path to a METACARPA-generated correlation matrix array.")
-  ("stop,x", "Stop METACARPA after generating the matrix.")
+
+ po::options_description desc("METACARPA ( μ - 🐟  ): Meta-analysis in C++ Accounting for Relatedness using arbitrary Precision Arithmetic.\n===========================================================================================================\n\n\tNB: All arguments mandatory except column and -m arguments.\n\tMETACARPA currently supports only one header line in input files, which is ignored.\n\nOptions description ");
+ desc.add_options()
+ ("help", "This help message.")
+ ("input,I", po::value<vector <string>>(), "Input file.")
+ ("output,O", po::value<string>(), "Output file.")
+ ("sep,t", po::value<char>(), "Input field separator. Don't forget to quote if necessary. Output field separator is always \\t.")
+ ("chr-col,c", po::value<int>(), "1-based chromosome column number.")
+ ("pos-col,q", po::value<int>(), "1-based position column number.")
+ ("a1-col,u", po::value<int>(), "1-based column number for effect or reference allele.")
+ ("a2-col,v", po::value<int>(), "1-based column number for other allele.")
+ ("rsid-col,r", po::value<int>(), "1-based column number for RSID or any other column that you want to keep.")
+ ("pval-col,p", po::value<int>(), "1-based p-value column number.")
+ ("beta-col,b", po::value<int>(), "1-based beta column number.")
+ ("se-col,s", po::value<int>(), "1-based beta-SE column number.")
+ ("size-col,n", po::value<int>(), "1-based sample size column (if absent, sample sizes will be assumed constant and should be appended to input file names using a comma : -I [FILENAME],[SAMPLE_SIZE]).")
+ ("id-col,i", po::value<int>(), "1-based ID column number (must be unique - e.g. chr:pos-A1-A2). If absent, chr:pos will be used.")
+ ("matrix,m", po::value<string>(), "Path to a METACARPA-generated correlation matrix array.")
+ ("stop,x", "Stop METACARPA after generating the matrix.")
+ ("debug,d", "Toggles an extremely verbose output, for debugging purposes.")
 
 
   //    ("ss1,1", po::value<int>(), "Sample size for study 1 (in order of join).")
   //    ("ss2,2", po::value<int>(), "Sample size for study 2 (in order of join).")
-  ;
-  po::variables_map vm;
+ ;
+ po::variables_map vm;
   //try{
-  po::store(po::parse_command_line(argc, argv, desc), vm);
-  po::notify(vm);   
+ po::store(po::parse_command_line(argc, argv, desc), vm);
+ po::notify(vm);   
   //}
   //catch (exception e){
 
-  if (vm.count("help")) {
-    cerr << desc << "\n";
-    return 1;
+
+ if (vm.count("help")) {
+  cerr << desc << "\n";
+  return 1;
+}
+
+if(vm.count("debug")){
+  VERBOSE=true;
+}
+
+if (vm.count("matrix")) {
+  MATRIX=vm["matrix"].as<string>();
+  if(!fexists(MATRIX)){error("Your matrix file "+MATRIX+" does not seem to exist.");}
+  else{info("Supplied matrix file ", MATRIX);}
+}
+
+if (!vm.count("input") || !vm.count("output")) {
+  cerr << "ERROR:\tInput and output filename is mandatory.\n\n";
+  cerr << desc << "\n";
+  exit(1);
+}
+
+if(vm.count("sep")){
+  SEP=vm["sep"].as<char>();
+}
+
+
+if(vm.count("pval-col")){
+  PVAL_COL=vm["pval-col"].as<int>()-1;
+}
+
+if(vm.count("beta-col")){
+  BETA_COL=vm["beta-col"].as<int>()-1;
+}
+
+if(vm.count("se-col")){
+  SE_COL=vm["se-col"].as<int>()-1;
+}
+
+if(vm.count("size-col")){
+  SIZE_COL=vm["size-col"].as<int>()-1;
+}
+
+if(vm.count("id-col")){
+  ID_COL=vm["id-col"].as<int>()-1;
+}
+
+if(vm.count("chr-col")){
+  CHR_COL=vm["chr-col"].as<int>()-1;
+}
+
+if(vm.count("pos-col")){
+  POS_COL=vm["pos-col"].as<int>()-1;
+}
+
+if(vm.count("id-col")){
+  RSID_COL=vm["id-col"].as<int>()-1;
+}
+
+if(vm.count("a1-col")){
+  A1_COL=vm["a1-col"].as<int>()-1;
+}
+
+if(vm.count("a2-col")){
+  A2_COL=vm["a2-col"].as<int>()-1;
+}
+
+
+if(vm.count("stop")){
+  SZTOPP=true;
+}
+
+
+if (vm.count("input") && vm.count("output")) {
+  ifiles=vm["input"].as<vector<string>>();
+  if(ifiles.size()==1){error("Only one input file. Nothing to do.");}
+  sample_sizes=std::vector<int>(ifiles.size());
+  info("Received "+to_string(ifiles.size())+" input files:");
+  for(unsigned short int i=0;i<ifiles.size();i++){
+    string fn;
+    stringstream filename_splitter_stream(ifiles[i]);
+    getline(filename_splitter_stream, fn, ',');
+    if(!fexists(fn)){error("File "+fn+" does not seem to exist.");}
+    string ss;
+    if(SIZE_COL==-1){
+      if(filename_splitter_stream.bad()){error("METACARPA couldn't find a comma after the filename "+fn+".");}
+      getline(filename_splitter_stream, ss, ',');
+      int sample_size;
+      try{
+        sample_size=boost::lexical_cast<int>(ss);
+      }catch(exception e){
+        error("METACARPA doesn't think your sample size ("+ss+") is a number for file "+fn+".");
+      }
+      info("\t"+fn+ " with sample size "+to_string(sample_size)+".");
+      sample_sizes[i]=sample_size;
+    }else{info(fn," with sample size info inside.");}
+    ifiles[i]=fn;      
   }
-
-  if (vm.count("matrix")) {
-    MATRIX=vm["matrix"].as<string>();
-    if(!fexists(MATRIX)){error("Your matrix file "+MATRIX+" does not seem to exist.");}
-    else{info("Supplied matrix file ", MATRIX);}
-  }
-
-  if (!vm.count("input") || !vm.count("output")) {
-    cerr << "ERROR:\tInput and output filename is mandatory.\n\n";
-    cerr << desc << "\n";
-    exit(1);
-  }
-
-  if(vm.count("sep")){
-    SEP=vm["sep"].as<char>();
-  }
-
-
-  if(vm.count("pval-col")){
-    PVAL_COL=vm["pval-col"].as<int>()-1;
-  }
-
-  if(vm.count("beta-col")){
-    BETA_COL=vm["beta-col"].as<int>()-1;
-  }
-
-  if(vm.count("se-col")){
-    SE_COL=vm["se-col"].as<int>()-1;
-  }
-
-  if(vm.count("size-col")){
-    SIZE_COL=vm["size-col"].as<int>()-1;
-  }
-
-  if(vm.count("id-col")){
-    ID_COL=vm["id-col"].as<int>()-1;
-  }
-
-  if(vm.count("chr-col")){
-    CHR_COL=vm["chr-col"].as<int>()-1;
-  }
-
-  if(vm.count("pos-col")){
-    POS_COL=vm["pos-col"].as<int>()-1;
-  }
-
-  if(vm.count("id-col")){
-    RSID_COL=vm["id-col"].as<int>()-1;
-  }
-
-  if(vm.count("a1-col")){
-    A1_COL=vm["a1-col"].as<int>()-1;
-  }
-
-  if(vm.count("a2-col")){
-    A2_COL=vm["a2-col"].as<int>()-1;
-  }
-
-
-  if(vm.count("stop")){
-    SZTOPP=true;
-  }
-
-
-  if (vm.count("input") && vm.count("output")) {
-    ifiles=vm["input"].as<vector<string>>();
-    if(ifiles.size()==1){error("Only one input file. Nothing to do.");}
-    sample_sizes=std::vector<int>(ifiles.size());
-    info("Received "+to_string(ifiles.size())+" input files:");
-    for(unsigned short int i=0;i<ifiles.size();i++){
-      string fn;
-      stringstream filename_splitter_stream(ifiles[i]);
-      getline(filename_splitter_stream, fn, ',');
-      if(!fexists(fn)){error("File "+fn+" does not seem to exist.");}
-      string ss;
-      if(SIZE_COL==-1){
-        if(filename_splitter_stream.bad()){error("METACARPA couldn't find a comma after the filename "+fn+".");}
-        getline(filename_splitter_stream, ss, ',');
-        int sample_size;
-        try{
-          sample_size=boost::lexical_cast<int>(ss);
-        }catch(exception e){
-          error("METACARPA doesn't think your sample size ("+ss+") is a number for file "+fn+".");
-        }
-        info("\t"+fn+ " with sample size "+to_string(sample_size)+".");
-        sample_sizes[i]=sample_size;
-      }else{info(fn," with sample size info inside.");}
-      ifiles[i]=fn;      
-    }
     //FILENAME=vm["input"].as<string>();
-    OUTFILE=vm["output"].as<string>();
+  OUTFILE=vm["output"].as<string>();
 
-    info("Writing to "+OUTFILE);
-    info("METACARPA ( μ - 🐟  ) successfully initialised.");
-  }
+  info("Writing to "+OUTFILE);
+  info("METACARPA ( μ - 🐟  ) successfully initialised.");
+}
 
 }
 
@@ -848,10 +997,10 @@ int main(int argc, char* argv[])
   std::vector<string> currentPos;
   std::vector<long double> currentPval;
   std::vector<long double> currentBeta;
-    vector<long double> currentBetaSe;
+  vector<long double> currentBetaSe;
   vector<string> currentRs;
- std::vector<string> currentA1;
-std::vector<string> currentA2;
+  std::vector<string> currentA1;
+  std::vector<string> currentA2;
   
     // Go to the first non-header line for all files and read the position and p-value
   i=0;
@@ -889,87 +1038,106 @@ std::vector<string> currentA2;
   int poscount=0;
   
   if(MATRIX == ""){
-  cout << "\n";
-  info("FIRST PASS : Calculating variance-covariance matrix.");
-  cout << "\n";
+    cout << "\n";
+    info("FIRST PASS : Calculating variance-covariance matrix.");
+    cout << "\n";
 
-  while(1){
+    while(1){
 
-    for(unsigned short int j=0;j<currentPos.size();j++){
+      for(unsigned short int j=0;j<currentPos.size();j++){
       // look for the minimum in the vector.
       // When found, convert p-value
       // add to data structure
       //advance file
-      if(currentPos[j]==minimum){
-        string tempLine;
+        if(currentPos[j]==minimum){
+          string tempLine;
         //info("j=",j);
         //correlations.add_minimum(currentPos[j],currentPval[j],pow(2,j));
-        correlations.add_minimum_beta(currentPos[j],currentBeta[j],pow(2,j));
-        if(!getline(*(filestreams[j]), tempLine, '\n')){currentPos[j]="30:1"; info("Read ",counts[j], " lines from file ", ifiles[j],".");eofs[j]=true;continue;}
-        
-        std::vector <string> line;
-        try{
-          counts[j]++;
-          line=parse_tab(tempLine, SEP);
+          if((poscount % 1000)==0) {correlations.add_minimum_beta(currentPos[j],currentBeta[j],pow(2,j));}
+          if(!getline(*(filestreams[j]), tempLine, '\n')){currentPos[j]="30:1"; info("Read ",counts[j], " lines from file ", ifiles[j],".");eofs[j]=true;continue;}
+
+          std::vector <string> line;
+          try{
+            counts[j]++;
+            line=parse_tab(tempLine, SEP);
           // advance file
-          currentPos[j]=line.at(CHR_COL)+":"+line.at(POS_COL);
-          currentPval[j]=stold(line[PVAL_COL]);
-          currentBeta[j]=stold(line[BETA_COL]);
-          currentBetaSe[j]=stold(line[SE_COL]);
-          currentRs[j]=line[RSID_COL];
-          currentA1[j]=line[A1_COL];
-          currentA2[j]=line[A2_COL];
+            currentPos[j]=line.at(CHR_COL)+":"+line.at(POS_COL);
+            currentPval[j]=stold(line[PVAL_COL]);
+            currentBeta[j]=stold(line[BETA_COL]);
+            currentBetaSe[j]=stold(line[SE_COL]);
+            currentRs[j]=line[RSID_COL];
+            currentA1[j]=line[A1_COL];
+            currentA2[j]=line[A2_COL];
 
           //cout << "update \t";
           //std::copy(currentPos.begin(), currentPos.end(), std::ostream_iterator<string>(std::cout, " "));
           //cout << "iterator "<<j<<"\n";
 
-        } catch(exception e){
-          error("Impossible to parse file ", ifiles[j], 
-            "\n\tCheck separator and column numbers for chromosome, position and p-value ( line was ", tempLine, ", read fields : ",line.size(),")\n\t Please not that METACARPA does not currently support NA values.");
+          } catch(exception e){
+            error("Impossible to parse file ", ifiles[j], 
+              "\n\tCheck separator and column numbers for chromosome, position and p-value ( line was ", tempLine, ", read fields : ",line.size(),")\n\t Please not that METACARPA does not currently support NA values.");
+          }
         }
       }
+
+      min= min_element(currentPos.begin(),currentPos.end(),rsid_comparator);
+      if(rsid_comparator(*min, minimum)){error("At least one of the input files is unsorted: ", *min, "  <  ", minimum);}
+      minimum=*min;                                                                                                                                                                                                                                                      
+        if(minimum=="30:1"){break;}
+        correlations.update_minima(minimum);
+        poscount++;
+      if((poscount % 10000) == 0){cout << "Processed " << poscount/1000 << "k variants\r"<<flush;}
     }
+    correlations.compute_correlations();
+    cout <<"\n";
+    info("Writing to "+OUTFILE+"."+to_string(RAND_ID)+".matrix.txt");
+    correlations.write(OUTFILE+"."+to_string(RAND_ID)+".matrix.txt");
+    // info("Checking integrity of file...");
+    // correlations.print();
+    // studies_correlation sc;
+    // sc.read(to_string(RAND_ID)+".matrix.txt");
+    // sc.print();
 
-    min= min_element(currentPos.begin(),currentPos.end(),rsid_comparator);
-    if(rsid_comparator(*min, minimum)){error("At least one of the input files is unsorted: ", *min, "  <  ", minimum);}
-    minimum=*min;                                                                                                                                                                                                                                                      
-    if(minimum=="30:1"){break;}
-    correlations.update_minima(minimum);
-    poscount++;
-    if((poscount % 10000) == 0){cout << "Processed " << poscount/1000 << "k variants\r"<<flush;}
-  }
-  correlations.compute_correlations();
-  cout <<"\n";
-  info("Writing to "+OUTFILE+"."+to_string(RAND_ID)+".matrix.txt");
-  correlations.write(OUTFILE+"."+to_string(RAND_ID)+".matrix.txt");
-  // info("Checking integrity of file...");
-  // correlations.print();
-  // studies_correlation sc;
-  // sc.read(to_string(RAND_ID)+".matrix.txt");
-  // sc.print();
-
-  if(SZTOPP){
-    info("Matrix has been generated. All done.");
-info("METACARPA ( μ - 🐟 ) swimming away.");
-info("Goodbye.");
-return(0);
-}
+    if(SZTOPP){
+      info("Matrix has been generated. All done.");
+      info("METACARPA ( μ - 🐟 ) swimming away.");
+      info("Goodbye.");
+      return(0);
+    }
 
   // Now we reopen the files and conduct single-point analysis
   // First of all close and open.
-}else{
+  }else{
   // The else to if(MATRIX=="")
   // i.e. here we are using a precomputed matrix
-  info("Reading matrix from ", MATRIX);
-  try{
-    correlations.read(MATRIX);
-    info("Successfully read matrix ", MATRIX);
+    info("Reading matrix from ", MATRIX);
+    try{
+      correlations.read(MATRIX);
+      info("Successfully read matrix ", MATRIX);
 
-  }catch(exception e){
-    error("Could not read ", MATRIX, "as a METACARPA-generated matrix.");
+    }catch(exception e){
+      error("Could not read ", MATRIX, "as a METACARPA-generated matrix.");
+    }
   }
-}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
   i=0;
   for_each(ifiles.begin(), ifiles.end(), [&](string s)-> void {
@@ -1040,7 +1208,6 @@ return(0);
   // Single-point analysis.
   ofstream ofs (OUTFILE, ios::out | ios::app);
   // Write headers
-  //ofs << rsid <<"\t"+chrpos << "\t"+s+"\t" <<vtostring<unsigned short int>(studies)<< "\t"+to_string(beta)+"\t"+to_string(betase)+"\t"<<z<<"\t"<<zse<<"\t"<<p_wald<<"\t"<<p<<"\t"<<p_fess<<"\n";
   ofs<<"rsid\tchr:pos\teffect_allele\tneffect_allele\teffects\tbeta\tse\tz\tz_se\tp_wald\tp_corrected\tp_stouffer\n";
   poscount=0;
   while(1){
@@ -1057,176 +1224,179 @@ return(0);
     std::vector<string> working_a2;
     unsigned int working_mask=0;
 
-    output_record ord;
-    //ord.rsid=id;
+    string match_a1="";
+    string match_a2="";
+    bool catastrophe=false;
     for(unsigned short int j=0;j<currentPos.size();j++){
+      if(currentPos[j]==minimum){
+        if(match_a1==""){match_a1=currentA1[j];match_a2=currentA2[j];continue;}
+        if(currentA1[j] != match_a1 || currentA2[j]!=match_a2){
+          if(VERBOSE){info("STOP: ", currentPos[j], minimum, match_a1, currentA1[j], match_a2, currentA2[j]);}
+        // there is an allele mismatch
+          catastrophe=true;
+          break;
+        }
+      }
+    }
+
+    // in case of allele mismatch, advance all files matching the minimum
+    if(catastrophe){
+      // We keep a group of arrays containing all multiline records, to be meta-analysed afterwards:
+      std::vector<string> dup_ids;
+      std::vector<long double> dup_betas;
+      std::vector<long double> dup_ses;
+      std::vector<long double> dup_p;
+      std::vector<unsigned short int> dup_studies;
+      std::vector<int> dup_weights;
+      std::vector<string> dup_a1;
+      std::vector<string> dup_a2;
+      std::vector<string> dup_rs;
+
+      for(unsigned short int j=0;j<currentPos.size();j++){
+        while(currentPos[j]==minimum){
+          if(VERBOSE){info("File ",j, " ", currentRs[j], " ", currentPos[j], " ", currentA1[j], " ", currentA2[j]);}
+          // Update with the current line that triggered the mismatch event:
+          dup_ids.push_back(currentPos[j]+"_"+currentA1[j]+"_"+currentA2[j]);
+          dup_betas.push_back(currentBeta[j]);
+          dup_ses.push_back(currentBetaSe[j]);
+          dup_p.push_back(currentPval[j]);
+          dup_weights.push_back(weights_p[j]);
+          dup_studies.push_back(j);
+          dup_rs.push_back(currentRs[j]);
+          dup_a1.push_back(currentA1[j]);
+          dup_a2.push_back(currentA2[j]);
+
+          string tempLine;
+          if(VERBOSE){ info("Reading file ",j);}
+          if(!getline(*(filestreams[j]), tempLine, '\n')){currentPos[j]="30:1"; info("Read ",counts[j], "lines from file", ifiles[j],".");eofs[j]=true;continue;}
+          std::vector <string> line;
+          if(VERBOSE){info(tempLine);}
+          try{
+            counts[j]++;
+            line=parse_tab(tempLine, SEP);
+            currentPos[j]=line.at(CHR_COL)+":"+line.at(POS_COL);
+            currentPval[j]=stold(line[PVAL_COL]);
+            currentBetaSe[j]=stold(line[SE_COL]);
+            currentBeta[j]=stold(line[BETA_COL]);
+            currentRs[j]=line[RSID_COL];
+            currentA1[j]=line[A1_COL];
+            currentA2[j]=line[A2_COL];
+            id=line[RSID_COL];
+            weights_p[j]=SIZE_COL>-1?stoi(line[SIZE_COL]) : sample_sizes[j];
+          } catch(exception e){
+            error("Impossible to parse file ", ifiles[i], 
+              "\n\tCheck separator and column numbers for chromosome, position and p-value (", line.size(),")");
+          }
+        }
+      }
+      if(VERBOSE){info("\n\n\n");
+      for(auto lol : dup_ids){
+        info(lol);
+      }
+      info("\n\n\n");
+    }
+      // At this point our arrays contain all the info on our position, independently of alleles.
+      // 1. Extract separate IDs per allele
+      // 2. For each of those, meta-analyse separately
+    
+    std::vector<string> distinct_ids(dup_ids);
+    sort(distinct_ids.begin(), distinct_ids.end());
+    vector<string>::iterator it=unique(distinct_ids.begin(), distinct_ids.end());
+    distinct_ids.erase(it, distinct_ids.end());
+    for (string &id : distinct_ids){
+      if(VERBOSE){info("Distinct ID ", id);}
+        // build a structure similar to the working_XXX.
+      for(unsigned short int j=0;j<dup_ids.size();j++){
+        if(dup_ids[j]==id){
+          working_ps.push_back(dup_p[j]);
+          working_weights.push_back(dup_weights[j]);
+          working_rs.push_back(dup_ids[j]);
+          working_betase.push_back(dup_ses[j]);
+          working_betas.push_back(dup_betas[j]);
+          working_id.push_back(dup_rs[j]);
+          working_a1.push_back(dup_a1[j]);
+          working_a2.push_back(dup_a2[j]);
+          if(VERBOSE){info("id ", dup_ids[j]," Found in study ", dup_studies[j]);}
+          working_mask|=(unsigned short int)(pow(2,dup_studies[j]));
+        }
+      }
+        //meta-analyse here:
+      meta_analyse(working_id, working_rs, working_a1, working_a2, working_ps, working_betas,  working_betase, working_weights, working_mask, ifiles.size(), correlations, ofs);
+
+
+
+      working_a2.clear();
+      working_a1.clear();
+      working_weights.clear();
+      working_id.clear();
+      working_betas.clear();
+      working_betase.clear();
+      working_ps.clear();
+      working_rs.clear();
+      working_mask=0;
+    }
+    min= min_element(currentPos.begin(),currentPos.end(),rsid_comparator);
+    if(rsid_comparator(*min, minimum)){error("At least one of the input files is unsorted: ", *min, "  <  ", minimum);}
+    minimum=*min;                                                                                                                                                                                                                                                      
+    if(minimum=="30:1"){break;}
+    correlations.update_minima(minimum);
+    continue;
+  }
+
+  output_record ord;
+    //ord.rsid=id;
+  for(unsigned short int j=0;j<currentPos.size();j++){
       // iterate trough the cursors at every file
       // look for the minimum determined earlier
       // When found, convert p-value
       // add to data structure
       //advance file
-      if(currentPos[j]==minimum){
-        string tempLine;
+    if(currentPos[j]==minimum){
+      string tempLine;
         // for each of the cursors that are standing at the minimum
         // push the subset of the vital infos into the "working" arrays
-        working_ps.push_back(currentPval[j]);
-        working_weights.push_back(weights_p[j]);
-        working_rs.push_back(currentPos[j]);
-        working_betase.push_back(currentBetaSe[j]);
-        working_betas.push_back(currentBeta[j]);
-        working_id.push_back(currentRs[j]);
-        working_a1.push_back(currentA1[j]);
-        working_a2.push_back(currentA2[j]);
+      working_ps.push_back(currentPval[j]);
+      working_weights.push_back(weights_p[j]);
+      working_rs.push_back(currentPos[j]);
+      working_betase.push_back(currentBetaSe[j]);
+      working_betas.push_back(currentBeta[j]);
+      working_id.push_back(currentRs[j]);
+      working_a1.push_back(currentA1[j]);
+      working_a2.push_back(currentA2[j]);
         //ord.rsid=currentRs[j];
-        working_mask|=(unsigned short int)(pow(2,j));
-        if(!getline(*(filestreams[j]), tempLine, '\n')){currentPos[j]="30:1"; info("Read ",counts[j], "lines from file", ifiles[j],".");eofs[j]=true;continue;}
-        
-        std::vector <string> line;
+      working_mask|=(unsigned short int)(pow(2,j));
+      if(!getline(*(filestreams[j]), tempLine, '\n')){currentPos[j]="30:1"; info("Read ",counts[j], "lines from file", ifiles[j],".");eofs[j]=true;continue;}
+
+      std::vector <string> line;
         // the following block advances the selected file only (since we have treated the current minimum)
-        try{
-          counts[j]++;
-          line=parse_tab(tempLine, SEP);
-          currentPos[j]=line.at(CHR_COL)+":"+line.at(POS_COL);
-          currentPval[j]=stold(line[PVAL_COL]);
-          currentBetaSe[j]=stold(line[SE_COL]);
-          currentBeta[j]=stold(line[BETA_COL]);
-          currentRs[j]=line[RSID_COL];
-          currentA1[j]=line[A1_COL];
-          currentA2[j]=line[A2_COL];
-          id=line[RSID_COL];
-          weights_p[j]=SIZE_COL>-1?stoi(line[SIZE_COL]) : sample_sizes[j];
+      try{
+        counts[j]++;
+        line=parse_tab(tempLine, SEP);
+        currentPos[j]=line.at(CHR_COL)+":"+line.at(POS_COL);
+        currentPval[j]=stold(line[PVAL_COL]);
+        currentBetaSe[j]=stold(line[SE_COL]);
+        currentBeta[j]=stold(line[BETA_COL]);
+        currentRs[j]=line[RSID_COL];
+        currentA1[j]=line[A1_COL];
+        currentA2[j]=line[A2_COL];
+        id=line[RSID_COL];
+        weights_p[j]=SIZE_COL>-1?stoi(line[SIZE_COL]) : sample_sizes[j];
           //cout << "update \t";
           //std::copy(currentPos.begin(), currentPos.end(), std::ostream_iterator<string>(std::cout, " "));
           //cout << "iterator "<<j<<"\n";
 
-        } catch(exception e){
-          error("Impossible to parse file ", ifiles[i], 
-            "\n\tCheck separator and column numbers for chromosome, position and p-value (", line.size(),")");
-        }
+      } catch(exception e){
+        error("Impossible to parse file ", ifiles[i], 
+          "\n\tCheck separator and column numbers for chromosome, position and p-value (", line.size(),")");
       }
     }
-    ord.chrpos=working_rs[0];
-    ord.rsid=working_id[0];
-    ord.a1=working_a1[0];
-    ord.a2=working_a2[0];
-    
-    unsigned int j=0;
-    for(unsigned short int i=0; i<ifiles.size();i++){
-      if((working_mask & (1<<i)) == 0){
-        ord.status.push_back('?');
-      }else{
-      //if((mask & mask-1)==0){error("mask is a power of two: "+to_string(mask)+" whereas i="+to_string(i)+" and maskcheck is "+to_string(1<<i));}
-        char effect_dir=working_betas[j] > 0? '+' : '-';
-        j++;
-        ord.status.push_back(effect_dir);
-      }
-    }
-
-    if(bit_count(working_mask)>1){
-      // compute weights
-      int sum_ss=somme(working_weights);
-      i=0;
-      //for(long double l : working_weights){working_weights[i]/=sum_ss;i++;}
-
-      for(long double l : working_weights){working_weights[i]=sqrt(working_weights[i]);working_weights[i]/=sqrt(sum_ss);i++;}
-
-
-      // compute transforms and sum thereof
-        i=0;
-      vector<cpp_dec_float_50> zs(working_weights.size());
-      vector<cpp_dec_float_50> zs_fess(working_weights.size());
-      for(long double l : working_ps){
-        zs[i]=z_transform_fess(working_ps[i], working_betas[i],working_rs[i]);
-        zs_fess[i]=z_transform_fess(working_ps[i], working_betas[i],working_rs[i]);
-        i++;
-      }
-      ord.z=somme(produit(zs, working_weights));
-
-
-      ord.z_fess=somme(produit(zs_fess, working_weights));
-      // compute p-value SD
-      // the first product in the line below sums to 1 by definition
-      //ord.zse=sqrt(somme(produit(working_weights, working_weights))+produit_reciproque_asymetrique(correlations.getmat(working_mask), working_weights));
-      ord.zse=sqrt(1+produit_reciproque_asymetrique(correlations.getmat(working_mask), working_weights));
-
-
-      //compute matrix for beta weights
-      //info("Working mask ", working_mask);
-      ublas::matrix<long double> c=correlations.getmat(working_mask);
-      for(i=0;i<c.size1();i++){
-        for(unsigned short int j=0;j<c.size1();j++){
-          if(i>j){c(i,j)=c(j,i);}else if (i==j){c(i,j)=1;}
-          c(i,j)=c(i,j)*working_betase[i]*working_betase[j];
-        }
-      }
-      // calculate weights
-      //    * sum of columns/total sum of matrix
-      ublas::matrix<long double> inverse(c.size1(),c.size1());
-
-      if(!InvertMatrix(c,inverse)){correlations.print(c);error("Could not invert variance/covariance matrix.");}
-
-      working_weights=colsum(inverse);
-      long double totsum=somme(working_weights);
-      for(i=0;i<working_weights.size();i++) working_weights[i]/=totsum;
-
-      // calculate betase
-        std::vector<long double> working_var=produit(working_betase, working_betase);
-      ord.betase=sqrt(somme(produit(produit(working_weights, working_weights), working_var)) + produit_reciproque_asymetrique(c, working_weights));
-
-      // meta-beta
-      ord.beta=somme(produit(working_weights, working_betas));
-          // compute meta-analysis p-value
-      boost::math::normal_distribution<long double>  correctednormal(0.0, ord.zse);
-      boost::math::normal_distribution<cpp_dec_float_50>  correctednormal_p(0.0, ord.zse);
-      boost::math::normal_distribution<long double>  wald(0.0, 1);
-      boost::math::normal_distribution<cpp_dec_float_50>  wald_p(0.0, 1);
-
-      try{
-       ord.p=2*(cdf(correctednormal, -1*abs(static_cast<long double>(ord.z))));
-       //ord.p_uncorrected=2*(1-cdf(wald, abs(static_cast<long double>(ord.z))));
-        //ord.p=1-cdf(correctednormal, -1*abs(static_cast<long double>(ord.z)));
-        // ord.p_uncorrected=1-cdf(wald, -1*abs(static_cast<long double>(ord.z)));
-       ord.p_fess=2*cdf(wald, -1*abs(static_cast<long double>(ord.z_fess)));
-       //ord.p=1-cdf(correctednormal, static_cast<long double>(ord.z));
-        // ord.p_uncorrected=1-cdf(wald, static_cast<long double>(ord.z));
-       ord.p_wald=2*cdf(wald, -1*abs(ord.beta/ord.betase));
-       if(ord.p==0){
-
-          //info("Warning, position "+minimum+" meta-analyses below long double precision. Analysing with multiprecision...");
-           //ord.p =1-cdf(correctednormal_p, -1*abs(ord.z));
-         //ord.p =1-cdf(correctednormal_p, ord.z);
-          // ord.p_uncorrected=1-cdf(wald_p, abs(ord.z));
-         ord.p_wald=2*cdf(wald_p, -1*abs(ord.beta/ord.betase));
-         ord.p=2*(cdf(correctednormal_p, -1*abs(ord.z)));
-         ord.p_fess=2*cdf(wald_p, -1*abs(ord.z_fess));
-         //ord.p_uncorrected=2*(1-cdf(correctednormal_p, abs(ord.z)));
-
-       }
-     }catch(exception e){
-        // ord.p=1-cdf(correctednormal_p, -1*abs(ord.z));
-      //ord.p=1-cdf(correctednormal_p, ord.z);
-        // ord.p_uncorrected=1-cdf(wald_p, -1*abs(ord.z));
-      ord.p=2*(cdf(correctednormal, -1*abs(ord.z)));
-      //ord.p_uncorrected=2*(1-cdf(wald_p, abs(ord.z)));
-      ord.p_wald=2*cdf(wald_p, -1*abs(ord.beta/ord.betase));
-      ord.p_fess=2*cdf(wald_p, -1*abs(ord.z_fess));
-    }
-
-  }else{
-      // SNP present in only 1 study, skip all calculations
-    ord.rsid=working_id[0];
-    ord.beta=working_betas[0];
-    ord.betase=working_betase[0];
-    ord.p=-1;
-    ord.p_wald=-1;
-    ord.p_fess=-1;
-    ord.z=-1;
-    ord.zse=-1;
-    ord.p_uncorrected=-1;
-    ord.a1=working_a1[0];
-    ord.a2=working_a2[0];
   }
-  ord.print(ofs);
+
+    // At this point, working_XX contains the previous minimal positions
+    // and current_XX contains the current (next) one
+
+  meta_analyse(working_id, working_rs, working_a1, working_a2, working_ps, working_betas,  working_betase, working_weights, working_mask, ifiles.size(), correlations, ofs);
+
 
   working_mask=0;
   working_weights.clear();
@@ -1246,8 +1416,142 @@ return(0);
   correlations.update_minima(minimum);
 
 }
+info("All done.");
+info("METACARPA ( μ - 🐟 ) swimming away.");
+info("Goodbye.");
+
+return 0;
+
+}
 
 
+
+// DEFUNCT CODE
+// OLD BODY OF META_ANALYSE (WITH COMMENTS)
+
+
+  //   ord.chrpos=working_rs[0];
+  //   ord.rsid=working_id[0];
+  //   ord.a1=working_a1[0];
+  //   ord.a2=working_a2[0];
+
+  //   unsigned int j=0;
+  //   for(unsigned short int i=0; i<ifiles.size();i++){
+  //     if((working_mask & (1<<i)) == 0){
+  //       ord.status.push_back('?');
+  //     }else{
+  //     //if((mask & mask-1)==0){error("mask is a power of two: "+to_string(mask)+" whereas i="+to_string(i)+" and maskcheck is "+to_string(1<<i));}
+  //       char effect_dir=working_betas[j] > 0? '+' : '-';
+  //       j++;
+  //       ord.status.push_back(effect_dir);
+  //     }
+  //   }
+
+  //   if(bit_count(working_mask)>1){
+  //     // compute weights
+  //     int sum_ss=somme(working_weights);
+  //     i=0;
+  //     //for(long double l : working_weights){working_weights[i]/=sum_ss;i++;}
+
+  //     for(long double l : working_weights){working_weights[i]=sqrt(working_weights[i]);working_weights[i]/=sqrt(sum_ss);i++;}
+
+
+  //     // compute transforms and sum thereof
+  //       i=0;
+  //     vector<cpp_dec_float_50> zs(working_weights.size());
+  //     vector<cpp_dec_float_50> zs_fess(working_weights.size());
+  //     for(long double l : working_ps){
+  //       zs[i]=z_transform_fess(working_ps[i], working_betas[i],working_rs[i]);
+  //       zs_fess[i]=z_transform_fess(working_ps[i], working_betas[i],working_rs[i]);
+  //       i++;
+  //     }
+  //     ord.z=somme(produit(zs, working_weights));
+
+
+  //     ord.z_fess=somme(produit(zs_fess, working_weights));
+  //     // compute p-value SD
+  //     // the first product in the line below sums to 1 by definition
+  //     //ord.zse=sqrt(somme(produit(working_weights, working_weights))+produit_reciproque_asymetrique(correlations.getmat(working_mask), working_weights));
+  //     ord.zse=sqrt(1+produit_reciproque_asymetrique(correlations.getmat(working_mask), working_weights));
+
+
+  //     //compute matrix for beta weights
+  //     //info("Working mask ", working_mask);
+  //     ublas::matrix<long double> c=correlations.getmat(working_mask);
+  //     for(i=0;i<c.size1();i++){
+  //       for(unsigned short int j=0;j<c.size1();j++){
+  //         if(i>j){c(i,j)=c(j,i);}else if (i==j){c(i,j)=1;}
+  //         c(i,j)=c(i,j)*working_betase[i]*working_betase[j];
+  //       }
+  //     }
+  //     // calculate weights
+  //     //    * sum of columns/total sum of matrix
+  //     ublas::matrix<long double> inverse(c.size1(),c.size1());
+
+  //     if(!InvertMatrix(c,inverse)){correlations.print(c);error("Could not invert variance/covariance matrix.");}
+
+  //     working_weights=colsum(inverse);
+  //     long double totsum=somme(working_weights);
+  //     for(i=0;i<working_weights.size();i++) working_weights[i]/=totsum;
+
+  //     // calculate betase
+  //       std::vector<long double> working_var=produit(working_betase, working_betase);
+  //     ord.betase=sqrt(somme(produit(produit(working_weights, working_weights), working_var)) + produit_reciproque_asymetrique(c, working_weights));
+
+  //     // meta-beta
+  //     ord.beta=somme(produit(working_weights, working_betas));
+  //         // compute meta-analysis p-value
+  //     boost::math::normal_distribution<long double>  correctednormal(0.0, ord.zse);
+  //     boost::math::normal_distribution<cpp_dec_float_50>  correctednormal_p(0.0, ord.zse);
+  //     boost::math::normal_distribution<long double>  wald(0.0, 1);
+  //     boost::math::normal_distribution<cpp_dec_float_50>  wald_p(0.0, 1);
+
+  //     try{
+  //      ord.p=2*(cdf(correctednormal, -1*abs(static_cast<long double>(ord.z))));
+  //      //ord.p_uncorrected=2*(1-cdf(wald, abs(static_cast<long double>(ord.z))));
+  //       //ord.p=1-cdf(correctednormal, -1*abs(static_cast<long double>(ord.z)));
+  //       // ord.p_uncorrected=1-cdf(wald, -1*abs(static_cast<long double>(ord.z)));
+  //      ord.p_fess=2*cdf(wald, -1*abs(static_cast<long double>(ord.z_fess)));
+  //      //ord.p=1-cdf(correctednormal, static_cast<long double>(ord.z));
+  //       // ord.p_uncorrected=1-cdf(wald, static_cast<long double>(ord.z));
+  //      ord.p_wald=2*cdf(wald, -1*abs(ord.beta/ord.betase));
+  //      if(ord.p==0){
+
+  //         //info("Warning, position "+minimum+" meta-analyses below long double precision. Analysing with multiprecision...");
+  //          //ord.p =1-cdf(correctednormal_p, -1*abs(ord.z));
+  //        //ord.p =1-cdf(correctednormal_p, ord.z);
+  //         // ord.p_uncorrected=1-cdf(wald_p, abs(ord.z));
+  //        ord.p_wald=2*cdf(wald_p, -1*abs(ord.beta/ord.betase));
+  //        ord.p=2*(cdf(correctednormal_p, -1*abs(ord.z)));
+  //        ord.p_fess=2*cdf(wald_p, -1*abs(ord.z_fess));
+  //        //ord.p_uncorrected=2*(1-cdf(correctednormal_p, abs(ord.z)));
+
+  //      }
+  //    }catch(exception e){
+  //       // ord.p=1-cdf(correctednormal_p, -1*abs(ord.z));
+  //     //ord.p=1-cdf(correctednormal_p, ord.z);
+  //       // ord.p_uncorrected=1-cdf(wald_p, -1*abs(ord.z));
+  //     ord.p=2*(cdf(correctednormal, -1*abs(ord.z)));
+  //     //ord.p_uncorrected=2*(1-cdf(wald_p, abs(ord.z)));
+  //     ord.p_wald=2*cdf(wald_p, -1*abs(ord.beta/ord.betase));
+  //     ord.p_fess=2*cdf(wald_p, -1*abs(ord.z_fess));
+  //   }
+
+  // }else{
+  //     // SNP present in only 1 study, skip all calculations
+  //   ord.rsid=working_id[0];
+  //   ord.beta=working_betas[0];
+  //   ord.betase=working_betase[0];
+  //   ord.p=-1;
+  //   ord.p_wald=-1;
+  //   ord.p_fess=-1;
+  //   ord.z=-1;
+  //   ord.zse=-1;
+  //   ord.p_uncorrected=-1;
+  //   ord.a1=working_a1[0];
+  //   ord.a2=working_a2[0];
+  // }
+  // ord.print(ofs);
   /*
   map <string, position_info, cmp_rsid> thisstudy;
   bool firstline=true;
@@ -1402,16 +1706,6 @@ studies_correlation scr=studies_correlation();
 scr.read("test_serial");
 info(scr.getmat((unsigned short int)3));
 */
-info("All done.");
-info("METACARPA ( μ - 🐟 ) swimming away.");
-info("Goodbye.");
-
-return 0;
-
-}
-
-
-
 
 
 
