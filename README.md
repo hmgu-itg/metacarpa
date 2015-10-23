@@ -25,10 +25,10 @@ The src directory contains a single source file and Makefile. The [Makefile](src
 Here is a short summary of METACARPA's options. 
 ```
 METACARPA ( μ - 🐟  ): Meta-analysis in C++ Accounting for Relatedness using arbitrary Precision Arithmetic.
-============================================================================================================
+===========================================================================================================
 
-        NB: All arguments mandatory except column arguments.
-        MATACARPA currently supports only one header line.
+        NB: All arguments mandatory except column and -m arguments.
+        METACARPA currently supports only one header line in input files, which is ignored.
 
 Options description :
   --help                This help message.
@@ -36,9 +36,10 @@ Options description :
   -O [ --output ] arg   Output file.
   -t [ --sep ] arg      Input field separator. Don't forget to quote if 
                         necessary. Output field separator is always \t.
-  -c [ --chr-col ] arg  1-based p-value column number.
+  -c [ --chr-col ] arg  1-based chromosome column number.
   -q [ --pos-col ] arg  1-based position column number.
-  -a [ --all-col ] arg  1-based column number for effect or reference allele.
+  -u [ --a1-col ] arg   1-based column number for effect or reference allele.
+  -v [ --a2-col ] arg   1-based column number for other allele.
   -r [ --rsid-col ] arg 1-based column number for RSID or any other column that
                         you want to keep.
   -p [ --pval-col ] arg 1-based p-value column number.
@@ -51,13 +52,16 @@ Options description :
   -i [ --id-col ] arg   1-based ID column number (must be unique - e.g. 
                         chr:pos-A1-A2). If absent, chr:pos will be used.
   -m [ --matrix ] arg   Path to a METACARPA-generated correlation matrix array.
+  -x [ --stop ]         Stop METACARPA after generating the matrix.
+  -d [ --debug ]        Toggles an extremely verbose output, for debugging 
+                        purposes.
+
 
 ```
 
 ## Data preparation
 
 Although METACARPA scales well to large numbers of variants, you can LD-prune or randomly thin down your SNPs to accelerate the calculation of study correlations. This can be done, for example, using [Plink](http://cog-genomics.org/plink2/). For more detailed estimations of minimum number of SNPs needed to get correct results, please refer to the [Metacarpa simulation report](bitbucket.org/agilly/metacarpa-simulation).
-Alternatively, you can use the `--thinning` or `-t` option.
 
 ## File formats
 
