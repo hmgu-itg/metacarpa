@@ -12,13 +12,13 @@ METACARPA is designed for meta-analysing genetic association studies with overla
 
 ### Binaries
 
-METACARPA is compiled as a static Linux x64 executable. Running it should be as simple as downloading [this executable](linux_64_static_bin/metacapa2) and running it. 
+METACARPA is compiled as a static Linux x64 executable. Running it should be as simple as downloading [this executable](https://bitbucket.org/agilly/metacarpa/downloads/metacarpa) and running it. 
 
-> The program is still under development and deployment has not yet been tested. Please email the author if you encounter any problems.
+> The program is still under development and deployment has not yet been tested extensively. Please email the author if you encounter any problems.
 
 ### Compilation
 
-The src directory contains a single source file and Makefile. The [Makefile](src/Makefile) is written for a specific environment and is not deployment-ready. If you plan to try and compile METACARPA, you will need to change at least the first three lines of the Makefile to add custom compiler paths. Please note that you will also need a copy of the [Boost](http://www.boost.org) mathematical libraries on your machine (the binaries were compiled using Boost 1.55.0).
+The src directory contains a single source file and Makefile. The [Makefile](src/Makefile) is written for a compiler that supports C++ 11. Please note that you will also need a copy of the [Boost](http://www.boost.org) mathematical libraries on your machine (the binaries were compiled using Boost 1.55.0).
 
 ## Program Options
 
@@ -57,6 +57,7 @@ Options description :
 ## Data preparation
 
 Although METACARPA scales well to large numbers of variants, you can LD-prune or randomly thin down your SNPs to accelerate the calculation of study correlations. This can be done, for example, using [Plink](http://cog-genomics.org/plink2/). For more detailed estimations of minimum number of SNPs needed to get correct results, please refer to the [Metacarpa simulation report](bitbucket.org/agilly/metacarpa-simulation).
+Alternatively, you can use the `--thinning` or `-t` option.
 
 ## File formats
 
@@ -66,6 +67,10 @@ METACARPA supports any fixed-delimiter input file that has the column it require
 
 will run the meta-analysis on two studies with $1500$ and $2300$ samples respectively. If your input format contains the number of individuals genotyped at a particular position, remove the commas and sample sizes after the file name and replace by `-n sample_col`, where `sample_col` is the column number that contains this information.
 
+## Field separators
+
+On some systems, it can be complicated to pass escaped characters such as tabs (`\t`) as parameters on the command line. In Bash, for example, you can circumvent this by telling the shell not to interpret the character, prefixing it with a dollar sign, like so: `$'\t'`.
+
 ## Multiple runs
 
 METACARPA runs in two steps:
@@ -73,13 +78,13 @@ METACARPA runs in two steps:
 * calculation of the correlation matrix
 * SNP per SNP meta-analysis.
 
-If you run meta-analyses for different traits, if you chunk your data or generally if you want to meta-analyse the same populations more than once, you can reuse the correlation matrix by using the `-m` argument. By default, METACARPA will always write the matrices it calculates to disk, they should appear as small `*.matrix` files in the running directory. If you point the `-m` argument to one of these files, METACARPA will skip calculation of the matrix and jump directly to the meta-analysis.
+If you run meta-analyses for different traits, if you chunk your data or generally if you want to meta-analyse the same populations more than once, you can reuse the correlation matrix by using the `-m` argument. By default, METACARPA will always write the matrices it calculates to disk, they should appear as small `*.matrix` files in the running directory. If you point the `-m` argument to one of these files, METACARPA will skip calculation of the matrix and jump directly to the meta-analysis. The `--stop` or `-x` argument tells METACARPA to only calculate the matrix, without performing any single-point analysis. 
 
-> If you decide to chunk your data, please ensure that you calculate the correlation matrix on the whole, un-chunked set. You can then use that matrix on your chunked data for meta-analysis.
+> If you decide to chunk your data, please ensure that you calculate the correlation matrix on the genome-wide, un-chunked set. You can then use that matrix on your chunked data for meta-analysis.
 
 ## Scalability
 
-The matrix calculation step is the most costly part of the algorithm, but it has been designed to scale well to very large datasets such as sequencing data. A memory assignment of 1Gb should be more than enough for most cases.
+The matrix calculation step is the most costly part of the algorithm, but it has been designed to scale well to very large datasets such as sequencing data. A memory assignment of 1Gb should be more than enough for most cases including whole-genome sequence data.
 
 ## Performance and accuracy
 
