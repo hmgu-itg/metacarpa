@@ -3,6 +3,8 @@
 #endif
 #include <math.h>
 #include <stdlib.h>
+#include <iostream>
+#include <iomanip>
  #ifndef INVERT_MATRIX_HPP
  #define INVERT_MATRIX_HPP
  // REMEMBER to update "lu.hpp" header includes from boost-CVS
@@ -21,6 +23,7 @@
 #include <boost/archive/xml_oarchive.hpp>
 
 namespace ublas = boost::numeric::ublas;
+bool VERBOSE=false;
  /* Matrix inversion routine.
     Uses lu_factorize and lu_substitute in uBLAS to invert a matrix */
  template<class T>
@@ -70,6 +73,8 @@ using namespace std;
 using namespace boost::math;
 using namespace boost::multiprecision;
 using namespace std;
+
+
 
 //void info(std::string s){
 //  std::cerr << "INFO:\t"<<s<<"\n";
@@ -139,6 +144,15 @@ inline long double somme(std::vector<long double> u){
   return ret;
 }
 
+inline float somme(std::vector<int> u){
+  float ret=0;
+  for(unsigned short int i=0;i<u.size();i++){
+    ret+=u[i];
+  }
+  return ret;
+}
+
+
 inline cpp_dec_float_50 somme(std::vector<cpp_dec_float_50> u){
   cpp_dec_float_50 ret=0;
   for(unsigned short int i=0;i<u.size();i++){
@@ -146,6 +160,15 @@ inline cpp_dec_float_50 somme(std::vector<cpp_dec_float_50> u){
   }
   return ret;
 }
+
+inline float somme(std::vector<float> u){
+  float ret=0;
+  for(unsigned short int i=0;i<u.size();i++){
+    ret+=u[i];
+  }
+  return ret;
+}
+
 
 inline long double produit_reciproque_asymetrique(boost::numeric::ublas::matrix<long double> m, vector<long double> v){
   long double ret=0;
@@ -186,6 +209,15 @@ inline std::vector<long double> produit(std::vector<long double> u, std::vector<
   return ret;
 }
 
+inline std::vector<float> produit(std::vector<float> u, std::vector<long double>& v) {
+  if(u.size()!=v.size()){error("Internal error 01: Mutual product of two vectors of different lengths ("+to_string(u.size())+" "+to_string(v.size())+").");}
+  std::vector<float> ret;
+  for(unsigned short int i=0;i<u.size();i++){
+    ret.push_back(u[i]*(float)v[i]);
+  }
+  return ret;
+}
+
 inline std::vector<cpp_dec_float_50> produit(std::vector<cpp_dec_float_50> u, std::vector<long double>& v) {
   if(u.size()!=v.size()){error("Internal error 01: Mutual product of two vectors of different lengths ("+to_string(u.size())+" "+to_string(v.size())+").");}
   std::vector<cpp_dec_float_50> ret;
@@ -196,6 +228,12 @@ inline std::vector<cpp_dec_float_50> produit(std::vector<cpp_dec_float_50> u, st
 }
 
 
+float global_allele_frequency(vector<float> allele_frequencies, std::vector<long double> sample_sizes){
+  float a=somme(produit(allele_frequencies, sample_sizes));
+    float b=somme(sample_sizes);
+  return(a/b);
+
+}
 
 inline vector<long double> colsum(boost::numeric::ublas::matrix<long double> & m){
   std::vector<long double> v;
@@ -221,7 +259,8 @@ static bool sign_beta(long double beta){
 
 static bool b_transform(long double p, string rsid){
   boost::math::normal_distribution<long double>  standardnormal(0.0, 1.0);
-  boost::math::normal_distribution<cpp_dec_float_50>  standardnormal_p(0.0, 1.0); cpp_dec_float_50 zf;
+  boost::math::normal_distribution<cpp_dec_float_50>  standardnormal_p(0.0, 1.0); 
+  cpp_dec_float_50 zf;
   if(p==1){zf=-1*static_cast<cpp_dec_float_50>("-inf");return(1);}
   bool bpval;
   try
@@ -356,6 +395,7 @@ private:
     int n10;
     int n11;
     void update_counts(bool a, bool b){
+      if(VERBOSE){info("update_counts(", a," , ", b,") called");}
       unsigned short int ap=a?1:0;
       unsigned short int bp=b?1:0;
       switch(2*ap-bp)
@@ -374,7 +414,7 @@ private:
       }
     }
     long double get_alpha(){
-      //cout << n00 << " " << n11 << " " << n01 << " " << n10 << "\n";
+      if(VERBOSE){info("n00=",n00,", n01=",n01,", n10=",n10,", n11=",n11);}
       long double alpha=((long double)n00*(long double)n11)/((long double)n01*(long double)n10);
       return alpha;
     }
@@ -504,23 +544,9 @@ public:
     ifs.close();
   }
 
-  // UNREACHABLE
-  void update_mask(unsigned short int mask, bool v[]){
-    std::vector<unsigned short int> studies;
-    unsigned short int nstudies=bit_count(mask);
-    for(unsigned short int i=0; i<nstudies;i++){
-      for(unsigned int j=i+1;j<nstudies;j++){
-        try{
-          count_matrix[mask](i,j).update_counts(v[i],v[j]);
-        }catch(exception e){
-          info("FAILURE with i=",i, "and j=", j,"value=",v[i] ," - ", v[j]);
-          exit(1);
-        }
-      }
-    }
-  }
 
   void update_mask(unsigned short int mask, vector<bool> v){
+    if(VERBOSE){info("update_mask() called with mask=",mask);}
     for(auto& msk : count_matrix){
         //info("msk.first=",msk.first, ", mask=", mask);
       if((msk.first & mask) == msk.first){
@@ -592,6 +618,7 @@ public:
       for(unsigned short int i=0; i<nstudies;i++){
         for(unsigned int j=i+1;j<nstudies;j++){
           long double alpha=m(i,j).get_alpha();
+          if(VERBOSE){info("between study ",i,"and",j, " the alpha is ",alpha);}
           correlations[mask](i,j)=(pow(alpha, 0.75)-1)/(pow(alpha, 0.75)+1);
         }
       }
@@ -644,6 +671,7 @@ struct output_record
   cpp_dec_float_50 p_wald;
   cpp_dec_float_50 p_uncorrected;
   cpp_dec_float_50 p_fess;
+  float af;
   string a1;
   string a2;
   unsigned short int n;
@@ -655,14 +683,14 @@ struct output_record
     // assumes that ofs is open in text append mode. If not, horrible things will happen.
     if(!ofs.is_open()){error("Internal: output file is not open.");exit(1);}
     string s(status.begin(), status.end());
-    ofs << rsid <<"\t"+chrpos << "\t"+s+"\t" <<a1<<"\t"<<a2<<"\t"<<vtostring<unsigned short int>(studies)<< "\t"+to_string(beta)+"\t"+to_string(betase)+"\t"<<z<<"\t"<<zse<<"\t"<<p_wald<<"\t"<<p<<"\t"<<p_fess<<"\n";
+    ofs  << rsid <<"\t"+chrpos+"\t" <<a1<<"\t"<<a2<<"\t"<< af  << "\t"+s+"\t" << beta<<"\t"<<betase<<"\t"<<z<<"\t"<<zse<<"\t"<<p_wald<<"\t"<<p<<"\t"<<p_fess<<"\n";
   }
 
 };
 
-bool VERBOSE=false;
 
-inline void meta_analyse(std::vector<string> working_id, std::vector<string> working_rs, std::vector<string> working_a1, std::vector<string> working_a2, std::vector<long double> working_ps, std::vector<long double> working_betas, std::vector<long double> working_betase, std::vector<long double> working_weights, unsigned short int working_mask, unsigned short int numstudies, studies_correlation correlations, ofstream& ofs){
+
+inline void meta_analyse(std::vector<string> working_id, std::vector<string> working_rs, std::vector<string> working_a1, std::vector<string> working_a2, std::vector<long double> working_ps, std::vector<long double> working_betas, std::vector<long double> working_betase, std::vector<long double> working_weights, unsigned short int working_mask, std::vector<float> working_af,unsigned short int numstudies, studies_correlation correlations, ofstream& ofs){
   if(VERBOSE){
     cout << "Got working_id=";
     for (auto i: working_id)
@@ -688,6 +716,9 @@ inline void meta_analyse(std::vector<string> working_id, std::vector<string> wor
     cout << "\nGot working_weights=" ;
     for (auto i: working_weights)
       std::cout << i << ' ';
+    cout << "\nGot working_AF=" ;
+    for (auto i: working_af)
+      std::cout << i << ' ';
     cout << "\nGot working_mask=" << working_mask << "\n";
     cout << "Got numstudies=" << numstudies << "\n";
   }
@@ -697,7 +728,7 @@ inline void meta_analyse(std::vector<string> working_id, std::vector<string> wor
   ord.rsid=working_id[0];
   ord.a1=working_a1[0];
   ord.a2=working_a2[0];
-
+  ord.af=global_allele_frequency(working_af, working_weights);
   unsigned int j=0;
   for(unsigned short int i=0; i<numstudies;i++){
     if((working_mask & (1<<i)) == 0){
@@ -764,6 +795,8 @@ inline void meta_analyse(std::vector<string> working_id, std::vector<string> wor
       // meta-beta
     ord.beta=somme(produit(working_weights, working_betas));
           // compute meta-analysis p-value
+    //info("Z=",ord.z);
+    //info("ZSE=", ord.zse);
     boost::math::normal_distribution<long double>  correctednormal(0.0, ord.zse);
     boost::math::normal_distribution<cpp_dec_float_50>  correctednormal_p(0.0, ord.zse);
     boost::math::normal_distribution<long double>  wald(0.0, 1);
@@ -816,6 +849,8 @@ int RSID_COL=1;
 int A1_COL=4;
 int A2_COL=5;
 int RAND_ID=0;
+int AF_COL=-1;
+int STEP=1;
 bool SZTOPP=false;
 string MATRIX="";
 string OUTFILE="";
@@ -849,6 +884,8 @@ int inline initialise(int argc, char* argv[]){
  ("se-col,s", po::value<int>(), "1-based beta-SE column number.")
  ("size-col,n", po::value<int>(), "1-based sample size column (if absent, sample sizes will be assumed constant and should be appended to input file names using a comma : -I [FILENAME],[SAMPLE_SIZE]).")
  ("id-col,i", po::value<int>(), "1-based ID column number (must be unique - e.g. chr:pos-A1-A2). If absent, chr:pos will be used.")
+ ("af-col,a", po::value<int>(), "1-based effect allele frequency.")
+ //("step,e",po::value<int>(), "Consider only every n-th variant in the matrix calculation. Simulations showed that only 30k variants are necessary for accurate results.")
  ("matrix,m", po::value<string>(), "Path to a METACARPA-generated correlation matrix array.")
  ("stop,x", "Stop METACARPA after generating the matrix.")
  ("debug,d", "Toggles an extremely verbose output, for debugging purposes.")
@@ -894,6 +931,16 @@ if(vm.count("sep")){
 if(vm.count("pval-col")){
   PVAL_COL=vm["pval-col"].as<int>()-1;
 }
+
+if(vm.count("step")){
+  STEP=vm["step"].as<int>()-1;
+}
+
+
+if(vm.count("af-col")){
+  AF_COL=vm["af-col"].as<int>()-1;
+}
+
 
 if(vm.count("beta-col")){
   BETA_COL=vm["beta-col"].as<int>()-1;
@@ -1001,7 +1048,8 @@ int main(int argc, char* argv[])
   vector<string> currentRs;
   std::vector<string> currentA1;
   std::vector<string> currentA2;
-  
+  std::vector<float> currentAF;
+
     // Go to the first non-header line for all files and read the position and p-value
   i=0;
   for(auto& s : filestreams) {
@@ -1043,7 +1091,7 @@ int main(int argc, char* argv[])
     cout << "\n";
 
     while(1){
-
+      if(VERBOSE){info("Treating variant ",poscount, ", minimum at ",minimum);}
       for(unsigned short int j=0;j<currentPos.size();j++){
       // look for the minimum in the vector.
       // When found, convert p-value
@@ -1052,8 +1100,8 @@ int main(int argc, char* argv[])
         if(currentPos[j]==minimum){
           string tempLine;
         //info("j=",j);
-        //correlations.add_minimum(currentPos[j],currentPval[j],pow(2,j));
-          if((poscount % 1000)==0) {correlations.add_minimum_beta(currentPos[j],currentBeta[j],pow(2,j));}
+        correlations.add_minimum(currentPos[j],currentPval[j],pow(2,j));
+          //if(STEP==1 || (poscount % STEP)==0) {correlations.add_minimum_beta(currentPos[j],currentBeta[j],pow(2,j));}
           if(!getline(*(filestreams[j]), tempLine, '\n')){currentPos[j]="30:1"; info("Read ",counts[j], " lines from file ", ifiles[j],".");eofs[j]=true;continue;}
 
           std::vector <string> line;
@@ -1084,8 +1132,9 @@ int main(int argc, char* argv[])
       if(rsid_comparator(*min, minimum)){error("At least one of the input files is unsorted: ", *min, "  <  ", minimum);}
       minimum=*min;                                                                                                                                                                                                                                                      
         if(minimum=="30:1"){break;}
-        correlations.update_minima(minimum);
-        poscount++;
+      //if((poscount % STEP)==0){correlations.update_minima(minimum);}
+      correlations.update_minima(minimum);
+      poscount++;
       if((poscount % 10000) == 0){cout << "Processed " << poscount/1000 << "k variants\r"<<flush;}
     }
     correlations.compute_correlations();
@@ -1184,6 +1233,7 @@ int main(int argc, char* argv[])
       currentRs.push_back(line[RSID_COL]);
       currentA1.push_back(line[A1_COL]);
       currentA2.push_back(line[A2_COL]);
+      currentAF.push_back(stof(line[AF_COL]));
 
       id=line[RSID_COL];
       // weights_p actually contain sample sizes, not weights.
@@ -1207,8 +1257,9 @@ int main(int argc, char* argv[])
 
   // Single-point analysis.
   ofstream ofs (OUTFILE, ios::out | ios::app);
+
   // Write headers
-  ofs<<"rsid\tchr:pos\teffect_allele\tneffect_allele\teffects\tbeta\tse\tz\tz_se\tp_wald\tp_corrected\tp_stouffer\n";
+  ofs<<"rsid\tchr:pos\teffect_allele\tneffect_allele\teffect_allele_frequency\teffects\tbeta\tse\tz\tz_se\tp_wald\tp_corrected\tp_stouffer\n";
   poscount=0;
   while(1){
     poscount++;
@@ -1222,6 +1273,7 @@ int main(int argc, char* argv[])
     std::vector<string> working_id;
     std::vector<string> working_a1;
     std::vector<string> working_a2;
+    std::vector<float> working_af;
     unsigned int working_mask=0;
 
     string match_a1="";
@@ -1251,6 +1303,7 @@ int main(int argc, char* argv[])
       std::vector<string> dup_a1;
       std::vector<string> dup_a2;
       std::vector<string> dup_rs;
+      std::vector<float> dup_af;
 
       for(unsigned short int j=0;j<currentPos.size();j++){
         while(currentPos[j]==minimum){
@@ -1265,6 +1318,7 @@ int main(int argc, char* argv[])
           dup_rs.push_back(currentRs[j]);
           dup_a1.push_back(currentA1[j]);
           dup_a2.push_back(currentA2[j]);
+          dup_af.push_back(currentAF[j]);
 
           string tempLine;
           if(VERBOSE){ info("Reading file ",j);}
@@ -1281,6 +1335,7 @@ int main(int argc, char* argv[])
             currentRs[j]=line[RSID_COL];
             currentA1[j]=line[A1_COL];
             currentA2[j]=line[A2_COL];
+            currentAF[j]=stof(line[AF_COL]);
             id=line[RSID_COL];
             weights_p[j]=SIZE_COL>-1?stoi(line[SIZE_COL]) : sample_sizes[j];
           } catch(exception e){
@@ -1316,12 +1371,13 @@ int main(int argc, char* argv[])
           working_id.push_back(dup_rs[j]);
           working_a1.push_back(dup_a1[j]);
           working_a2.push_back(dup_a2[j]);
+          working_af.push_back(dup_af[j]);
           if(VERBOSE){info("id ", dup_ids[j]," Found in study ", dup_studies[j]);}
           working_mask|=(unsigned short int)(pow(2,dup_studies[j]));
         }
       }
         //meta-analyse here:
-      meta_analyse(working_id, working_rs, working_a1, working_a2, working_ps, working_betas,  working_betase, working_weights, working_mask, ifiles.size(), correlations, ofs);
+      meta_analyse(working_id, working_rs, working_a1, working_a2, working_ps, working_betas,  working_betase, working_weights, working_mask, working_af, ifiles.size(), correlations, ofs);
 
 
 
@@ -1333,6 +1389,7 @@ int main(int argc, char* argv[])
       working_betase.clear();
       working_ps.clear();
       working_rs.clear();
+      working_af.clear();
       working_mask=0;
     }
     min= min_element(currentPos.begin(),currentPos.end(),rsid_comparator);
@@ -1363,6 +1420,7 @@ int main(int argc, char* argv[])
       working_id.push_back(currentRs[j]);
       working_a1.push_back(currentA1[j]);
       working_a2.push_back(currentA2[j]);
+      working_af.push_back(currentAF[j]);
         //ord.rsid=currentRs[j];
       working_mask|=(unsigned short int)(pow(2,j));
       if(!getline(*(filestreams[j]), tempLine, '\n')){currentPos[j]="30:1"; info("Read ",counts[j], "lines from file", ifiles[j],".");eofs[j]=true;continue;}
@@ -1379,6 +1437,7 @@ int main(int argc, char* argv[])
         currentRs[j]=line[RSID_COL];
         currentA1[j]=line[A1_COL];
         currentA2[j]=line[A2_COL];
+        currentAF[j]=stof(line[AF_COL]);
         id=line[RSID_COL];
         weights_p[j]=SIZE_COL>-1?stoi(line[SIZE_COL]) : sample_sizes[j];
           //cout << "update \t";
@@ -1395,7 +1454,7 @@ int main(int argc, char* argv[])
     // At this point, working_XX contains the previous minimal positions
     // and current_XX contains the current (next) one
 
-  meta_analyse(working_id, working_rs, working_a1, working_a2, working_ps, working_betas,  working_betase, working_weights, working_mask, ifiles.size(), correlations, ofs);
+  meta_analyse(working_id, working_rs, working_a1, working_a2, working_ps, working_betas,  working_betase, working_weights, working_mask, working_af, ifiles.size(), correlations, ofs);
 
 
   working_mask=0;
@@ -1407,7 +1466,7 @@ int main(int argc, char* argv[])
   working_id.clear();
   working_a1.clear();
   working_a2.clear();
-
+  working_af.clear();
 
   min= min_element(currentPos.begin(),currentPos.end(),rsid_comparator);
   if(rsid_comparator(*min, minimum)){error("At least one of the input files is unsorted: ", *min, "  <  ", minimum);}
