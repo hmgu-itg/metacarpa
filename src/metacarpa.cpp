@@ -733,7 +733,7 @@ inline void meta_analyse(std::vector<string> working_id, std::vector<string> wor
   ord.a2=working_a2[0];
   if(VERBOSE){info("Calculating GAF");}
   ord.af=global_allele_frequency(working_af, working_weights);
-  if(VERBOSE){info("Computing effect string");}
+  if(VERBOSE){info("Computing effect string");} 
   unsigned int j=0;
   for(unsigned short int i=0; i<numstudies;i++){
     if((working_mask & (1<<i)) == 0){
@@ -1305,6 +1305,7 @@ int main(int argc, char* argv[])
           if(currentA1[j]==match_a2 && currentA2[j]==match_a1){
             if(VERBOSE){info("Allele flip occurs.");}
             currentBeta[j]=-1*currentBeta[j];
+            currentAF[j]=1-currentAF[j];
             currentA1[j]=match_a1;
             currentA2[j]=match_a2;
           }else{
