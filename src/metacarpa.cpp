@@ -174,7 +174,8 @@ inline long double produit_reciproque_asymetrique(boost::numeric::ublas::matrix<
   long double ret=0;
   for(unsigned short int i=0;i<m.size1();i++){
     for(unsigned short int j=i+1;j<m.size1(); j++){
-      ret+=v[i]*v[j]*m(i,j);
+      long double addendum=v[i]*v[j]*m(i,j);
+      ret+= addendum;
     }
   }
   return ret;
@@ -389,7 +390,7 @@ private:
   }
   
   struct count_data{
-    count_data(): n00(0), n01(0), n10(0), n11(0){}
+    count_data(): n00(0), n01(1), n10(1), n11(0){}
     int n00;
     int n01;
     int n10;
@@ -613,6 +614,7 @@ public:
       unsigned short int mask=it->first;
       ublas::matrix<count_data> m=it->second;
       unsigned short int nstudies=bit_count(mask);
+      if(VERBOSE){info("For mask ", mask, " correlations are being computed:");}
       //info(nstudies);
       //cout << "nstud=" << nstudies<<"\n";
       for(unsigned short int i=0; i<nstudies;i++){
@@ -620,6 +622,7 @@ public:
           long double alpha=m(i,j).get_alpha();
           if(VERBOSE){info("between study ",i,"and",j, " the alpha is ",alpha);}
           correlations[mask](i,j)=(pow(alpha, 0.75)-1)/(pow(alpha, 0.75)+1);
+          if(correlations[mask](i,j)==-1){correlations[mask](i,j)=0;}
         }
       }
       //info(correlations[mask]);
@@ -728,7 +731,9 @@ inline void meta_analyse(std::vector<string> working_id, std::vector<string> wor
   ord.rsid=working_id[0];
   ord.a1=working_a1[0];
   ord.a2=working_a2[0];
+  info("Calculating GAF");
   ord.af=global_allele_frequency(working_af, working_weights);
+  info("Computing effect string");
   unsigned int j=0;
   for(unsigned short int i=0; i<numstudies;i++){
     if((working_mask & (1<<i)) == 0){
@@ -749,9 +754,9 @@ inline void meta_analyse(std::vector<string> working_id, std::vector<string> wor
 
     for(long double l : working_weights){working_weights[i]=sqrt(working_weights[i]);working_weights[i]/=sqrt(sum_ss);i++;}
 
-
+    if(VERBOSE){info("Computing meta-analysis statistic");}
       // compute transforms and sum thereof
-      i=0;
+    i=0;
     vector<cpp_dec_float_50> zs(working_weights.size());
     vector<cpp_dec_float_50> zs_fess(working_weights.size());
     for(long double l : working_ps){
@@ -761,14 +766,21 @@ inline void meta_analyse(std::vector<string> working_id, std::vector<string> wor
     }
     ord.z=somme(produit(zs, working_weights));
 
+        if(VERBOSE){info("(=",ord.z,")Computing uncorrected meta-analysis statistic.");}
 
     ord.z_fess=somme(produit(zs_fess, working_weights));
+        if(VERBOSE){info("(=",ord.z_fess,")Computing SE.");    cout << "\nGot working_weights=" ;
+    for (auto i: working_weights)
+      std::cout << i << ' ';}
+
+
       // compute p-value SD
       // the first product in the line below sums to 1 by definition
       //ord.zse=sqrt(somme(produit(working_weights, working_weights))+produit_reciproque_asymetrique(correlations.getmat(working_mask), working_weights));
     ord.zse=sqrt(1+produit_reciproque_asymetrique(correlations.getmat(working_mask), working_weights));
 
-
+     if(VERBOSE){ info("\n(=",ord.zse,")Computing matrix for beta weights.");}
+  
       //compute matrix for beta weights
       //info("Working mask ", working_mask);
     ublas::matrix<long double> c=correlations.getmat(working_mask);
@@ -783,6 +795,7 @@ inline void meta_analyse(std::vector<string> working_id, std::vector<string> wor
     ublas::matrix<long double> inverse(c.size1(),c.size1());
 
     if(!InvertMatrix(c,inverse)){correlations.print(c);error("Could not invert variance/covariance matrix.");}
+         if(VERBOSE){ info("Original matrix");correlations.print(c);info("Inverted matrix");correlations.print(inverse);}
 
     working_weights=colsum(inverse);
     long double totsum=somme(working_weights);
@@ -867,28 +880,33 @@ int inline initialise(int argc, char* argv[]){
   std::srand(std::time(0));
  RAND_ID=rand() % 1000 + 1989; // I was born that year and expect to live around 1000 years.
 
+string prname=argv[0];
 
- po::options_description desc("METACARPA ( μ - 🐟  ): Meta-analysis in C++ Accounting for Relatedness using arbitrary Precision Arithmetic.\n===========================================================================================================\n\n\tNB: All arguments mandatory except column and -m arguments.\n\tMETACARPA currently supports only one header line in input files, which is ignored.\n\nOptions description ");
+ po::options_description desc("METACARPA ( μ - 🐟  ): Meta-analysis in C++ Accounting for Relatedness using arbitrary Precision Arithmetic.\n\
+===========================================================================================================\n\n\
+  \tUsage : "+prname+" -I infile1[,size] [-I infile2[,size] ...] -O outfile --chr-col int --pos_col int --a1-col int\
+--a2-col int --pval-col int --beta-col int --se-col int --af-col int [--size-col int] [--sep char] [--id-col int] [-m matrix_file] [-x] [-d]\n\n\
+NB:\tMETACARPA currently supports only one header line in input files, which is ignored.\n\nOptions description ");
  desc.add_options()
  ("help", "This help message.")
- ("input,I", po::value<vector <string>>(), "Input file.")
- ("output,O", po::value<string>(), "Output file.")
+ ("input,I", po::value<vector <string>>(), "(mandatory) Input file.")
+ ("output,O", po::value<string>(), "(mandatory) Output file.")
+ ("chr-col,c", po::value<int>(), "(mandatory) 1-based chromosome column number.")
+ ("pos-col,q", po::value<int>(), "(mandatory) 1-based position column number.")
+ ("a1-col,u", po::value<int>(), "(mandatory) 1-based column number for effect or reference allele.")
+ ("a2-col,v", po::value<int>(), "(mandatory) 1-based column number for other allele.")
+ //("rsid-col,r", po::value<int>(), "1-based column number for RSID or any other column that you want to keep.")
+ ("pval-col,p", po::value<int>(), "(mandatory) 1-based p-value column number.")
+ ("beta-col,b", po::value<int>(), "(mandatory) 1-based beta column number.")
+ ("se-col,s", po::value<int>(), "(mandatory) 1-based beta-SE column number.")
+ ("af-col,a", po::value<int>(), "(mandatory) 1-based effect allele frequency.")
+  ("size-col,n", po::value<int>(), "1-based sample size column (if absent, sample sizes will be assumed constant and should be appended to input file names using a comma : -I infile,size).")
  ("sep,t", po::value<char>(), "Input field separator. Don't forget to quote if necessary. Output field separator is always \\t.")
- ("chr-col,c", po::value<int>(), "1-based chromosome column number.")
- ("pos-col,q", po::value<int>(), "1-based position column number.")
- ("a1-col,u", po::value<int>(), "1-based column number for effect or reference allele.")
- ("a2-col,v", po::value<int>(), "1-based column number for other allele.")
- ("rsid-col,r", po::value<int>(), "1-based column number for RSID or any other column that you want to keep.")
- ("pval-col,p", po::value<int>(), "1-based p-value column number.")
- ("beta-col,b", po::value<int>(), "1-based beta column number.")
- ("se-col,s", po::value<int>(), "1-based beta-SE column number.")
- ("size-col,n", po::value<int>(), "1-based sample size column (if absent, sample sizes will be assumed constant and should be appended to input file names using a comma : -I [FILENAME],[SAMPLE_SIZE]).")
- ("id-col,i", po::value<int>(), "1-based ID column number (must be unique - e.g. chr:pos-A1-A2). If absent, chr:pos will be used.")
- ("af-col,a", po::value<int>(), "1-based effect allele frequency.")
+ ("id-col,i", po::value<int>(), "1-based RSID column number (should be unique - e.g. chr:pos-A1-A2). If absent, chr:pos will be used.")
  //("step,e",po::value<int>(), "Consider only every n-th variant in the matrix calculation. Simulations showed that only 30k variants are necessary for accurate results.")
  ("matrix,m", po::value<string>(), "Path to a METACARPA-generated correlation matrix array.")
  ("stop,x", "Stop METACARPA after generating the matrix.")
- ("debug,d", "Toggles an extremely verbose output, for debugging purposes.")
+ ("debug,d", "Toggles an extremely verbose output, for debugging purposes only.")
 
 
   //    ("ss1,1", po::value<int>(), "Sample size for study 1 (in order of join).")
@@ -1066,7 +1084,7 @@ int main(int argc, char* argv[])
       currentPval.push_back(stold(line[PVAL_COL]));
       currentBetaSe.push_back(stold(line[SE_COL]));
       currentBeta.push_back(stold(line[BETA_COL]));
-      currentRs.push_back(line[RSID_COL]);
+      if(ID_COL>-1){currentRs.push_back(line[RSID_COL]);}else{currentRs.push_back(line.at(CHR_COL)+":"+line.at(POS_COL));}
       currentA1.push_back(line[A1_COL]);
       currentA2.push_back(line[A2_COL]);
     } catch(exception e){
@@ -1113,7 +1131,7 @@ int main(int argc, char* argv[])
             currentPval[j]=stold(line[PVAL_COL]);
             currentBeta[j]=stold(line[BETA_COL]);
             currentBetaSe[j]=stold(line[SE_COL]);
-            currentRs[j]=line[RSID_COL];
+            if(ID_COL>-1){currentRs[j]=line[RSID_COL];}else{currentRs[j]=currentPos[j];}
             currentA1[j]=line[A1_COL];
             currentA2[j]=line[A2_COL];
 
@@ -1230,12 +1248,12 @@ int main(int argc, char* argv[])
       currentPval.push_back(stold(line[PVAL_COL]));
       currentBetaSe.push_back(stold(line[SE_COL]));
       currentBeta.push_back(stold(line[BETA_COL]));
-      currentRs.push_back(line[RSID_COL]);
+      if(ID_COL>-1){currentRs.push_back(line[RSID_COL]);}else{currentRs.push_back(line.at(CHR_COL)+":"+line.at(POS_COL));}
       currentA1.push_back(line[A1_COL]);
       currentA2.push_back(line[A2_COL]);
       currentAF.push_back(stof(line[AF_COL]));
 
-      id=line[RSID_COL];
+      if(ID_COL>-1){id=line[RSID_COL];}else{id=line.at(CHR_COL)+":"+line.at(POS_COL);}
       // weights_p actually contain sample sizes, not weights.
       // This is because in the loop that follows, dividends are not known beforehand.
       if(SIZE_COL>-1){weights_p[i]=stoi(line[SIZE_COL]);}else{weights_p[i]=sample_sizes[i];}
@@ -1284,9 +1302,16 @@ int main(int argc, char* argv[])
         if(match_a1==""){match_a1=currentA1[j];match_a2=currentA2[j];continue;}
         if(currentA1[j] != match_a1 || currentA2[j]!=match_a2){
           if(VERBOSE){info("STOP: ", currentPos[j], minimum, match_a1, currentA1[j], match_a2, currentA2[j]);}
+          if(currentA1[j]==match_a2 && currentA2[j]==match_a1){
+            if(VERBOSE){info("Allele flip occurs.");}
+            currentBeta[j]=-1*currentBeta[j];
+            currentA1[j]=match_a1;
+            currentA2[j]=match_a2;
+          }else{
         // there is an allele mismatch
           catastrophe=true;
           break;
+        }
         }
       }
     }
@@ -1332,11 +1357,11 @@ int main(int argc, char* argv[])
             currentPval[j]=stold(line[PVAL_COL]);
             currentBetaSe[j]=stold(line[SE_COL]);
             currentBeta[j]=stold(line[BETA_COL]);
-            currentRs[j]=line[RSID_COL];
+            if(ID_COL>-1){currentRs[j]=line[RSID_COL];}else{currentRs[j]=currentPos[j];}
             currentA1[j]=line[A1_COL];
             currentA2[j]=line[A2_COL];
             currentAF[j]=stof(line[AF_COL]);
-            id=line[RSID_COL];
+            if(ID_COL>-1){id=line[RSID_COL];}else{id=line.at(CHR_COL)+":"+line.at(POS_COL);}
             weights_p[j]=SIZE_COL>-1?stoi(line[SIZE_COL]) : sample_sizes[j];
           } catch(exception e){
             error("Impossible to parse file ", ifiles[i], 
@@ -1434,11 +1459,12 @@ int main(int argc, char* argv[])
         currentPval[j]=stold(line[PVAL_COL]);
         currentBetaSe[j]=stold(line[SE_COL]);
         currentBeta[j]=stold(line[BETA_COL]);
-        currentRs[j]=line[RSID_COL];
+
+        if(ID_COL>-1){currentRs[j]=line[RSID_COL];}else{currentRs[j]=currentPos[j];}
         currentA1[j]=line[A1_COL];
         currentA2[j]=line[A2_COL];
         currentAF[j]=stof(line[AF_COL]);
-        id=line[RSID_COL];
+        if(ID_COL>-1){id=line[RSID_COL];}else{id=line.at(CHR_COL)+":"+line.at(POS_COL);}
         weights_p[j]=SIZE_COL>-1?stoi(line[SIZE_COL]) : sample_sizes[j];
           //cout << "update \t";
           //std::copy(currentPos.begin(), currentPos.end(), std::ostream_iterator<string>(std::cout, " "));
