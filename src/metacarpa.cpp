@@ -731,9 +731,9 @@ inline void meta_analyse(std::vector<string> working_id, std::vector<string> wor
   ord.rsid=working_id[0];
   ord.a1=working_a1[0];
   ord.a2=working_a2[0];
-  info("Calculating GAF");
+  if(VERBOSE){info("Calculating GAF");}
   ord.af=global_allele_frequency(working_af, working_weights);
-  info("Computing effect string");
+  if(VERBOSE){info("Computing effect string");}
   unsigned int j=0;
   for(unsigned short int i=0; i<numstudies;i++){
     if((working_mask & (1<<i)) == 0){
