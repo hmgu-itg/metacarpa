@@ -681,12 +681,13 @@ struct output_record
   vector<char> status;
   vector<unsigned short int> studies;
   string rsid;
+  int size;
 
   void print(ofstream& ofs){
     // assumes that ofs is open in text append mode. If not, horrible things will happen.
     if(!ofs.is_open()){error("Internal: output file is not open.");exit(1);}
     string s(status.begin(), status.end());
-    ofs  << rsid <<"\t"+chrpos+"\t" <<a1<<"\t"<<a2<<"\t"<< af  << "\t"+s+"\t" << beta<<"\t"<<betase<<"\t"<<z<<"\t"<<zse<<"\t"<<p_wald<<"\t"<<p<<"\t"<<p_fess<<"\n";
+    ofs  << rsid <<"\t"+chrpos+"\t" <<a1<<"\t"<<a2<<"\t"<< af  << "\t"+s+"\t" << beta<<"\t"<<betase<<"\t"<<z<<"\t"<<zse<<"\t"<<p_wald<<"\t"<<p<<"\t"<<p_fess<<"\t"<<size<<"\n";
   }
 
 };
@@ -749,6 +750,7 @@ inline void meta_analyse(std::vector<string> working_id, std::vector<string> wor
   {
       // compute weights
     int sum_ss=somme(working_weights);
+    ord.size=sum_ss;
     int i=0;
       //for(long double l : working_weights){working_weights[i]/=sum_ss;i++;}
 
@@ -837,7 +839,7 @@ else {
   ord.rsid=working_id[0];
   ord.beta=working_betas[0];
   ord.betase=working_betase[0];
-  ord.p=-1;
+  ord.p=working_ps[0];
   ord.p_wald=-1;
   ord.p_fess=-1;
   ord.z=-1;
@@ -845,6 +847,7 @@ else {
   ord.p_uncorrected=-1;
   ord.a1=working_a1[0];
   ord.a2=working_a2[0];
+  ord.size=working_weights[0];
 }
 ord.print(ofs);
 }
@@ -1277,7 +1280,7 @@ int main(int argc, char* argv[])
   ofstream ofs (OUTFILE, ios::out | ios::app);
 
   // Write headers
-  ofs<<"rsid\tchr:pos\teffect_allele\tneffect_allele\teffect_allele_frequency\teffects\tbeta\tse\tz\tz_se\tp_wald\tp_corrected\tp_stouffer\n";
+  ofs<<"rsid\tchr:pos\teffect_allele\tneffect_allele\teffect_allele_frequency\teffects\tbeta\tse\tz\tz_se\tp_wald\tp_corrected\tp_stouffer\tn\n";
   poscount=0;
   while(1){
     poscount++;
@@ -1317,7 +1320,8 @@ int main(int argc, char* argv[])
       }
     }
 
-    // in case of allele mismatch, advance all files matching the minimum
+    // ALLELE MISMATCH
+    // advance all files matching the minimum
     if(catastrophe){
       // We keep a group of arrays containing all multiline records, to be meta-analysed afterwards:
       std::vector<string> dup_ids;
@@ -1370,61 +1374,62 @@ int main(int argc, char* argv[])
           }
         }
       }
-      if(VERBOSE){info("\n\n\n");
-      for(auto lol : dup_ids){
-        info(lol);
+      if(VERBOSE){
+        info("\n\n\n");
+        for(auto lol : dup_ids){
+          info(lol);
+        }
+        info("\n\n\n");
       }
-      info("\n\n\n");
-    }
       // At this point our arrays contain all the info on our position, independently of alleles.
       // 1. Extract separate IDs per allele
       // 2. For each of those, meta-analyse separately
     
-    std::vector<string> distinct_ids(dup_ids);
-    sort(distinct_ids.begin(), distinct_ids.end());
-    vector<string>::iterator it=unique(distinct_ids.begin(), distinct_ids.end());
-    distinct_ids.erase(it, distinct_ids.end());
-    for (string &id : distinct_ids){
-      if(VERBOSE){info("Distinct ID ", id);}
-        // build a structure similar to the working_XXX.
-      for(unsigned short int j=0;j<dup_ids.size();j++){
-        if(dup_ids[j]==id){
-          working_ps.push_back(dup_p[j]);
-          working_weights.push_back(dup_weights[j]);
-          working_rs.push_back(dup_ids[j]);
-          working_betase.push_back(dup_ses[j]);
-          working_betas.push_back(dup_betas[j]);
-          working_id.push_back(dup_rs[j]);
-          working_a1.push_back(dup_a1[j]);
-          working_a2.push_back(dup_a2[j]);
-          working_af.push_back(dup_af[j]);
-          if(VERBOSE){info("id ", dup_ids[j]," Found in study ", dup_studies[j]);}
-          working_mask|=(unsigned short int)(pow(2,dup_studies[j]));
+        std::vector<string> distinct_ids(dup_ids);
+        sort(distinct_ids.begin(), distinct_ids.end());
+        vector<string>::iterator it=unique(distinct_ids.begin(), distinct_ids.end());
+        distinct_ids.erase(it, distinct_ids.end());
+        for (string &id : distinct_ids){
+          if(VERBOSE){info("Distinct ID ", id);}
+          // build a structure similar to the working_XXX.
+          for(unsigned short int j=0;j<dup_ids.size();j++){
+            if(dup_ids[j]==id){
+              working_ps.push_back(dup_p[j]);
+              working_weights.push_back(dup_weights[j]);
+              working_rs.push_back(dup_ids[j]);
+              working_betase.push_back(dup_ses[j]);
+              working_betas.push_back(dup_betas[j]);
+              working_id.push_back(dup_rs[j]);
+              working_a1.push_back(dup_a1[j]);
+              working_a2.push_back(dup_a2[j]);
+              working_af.push_back(dup_af[j]);
+              if(VERBOSE){info("id ", dup_ids[j]," Found in study ", dup_studies[j]);}
+              working_mask|=(unsigned short int)(pow(2,dup_studies[j]));
+            }
+          }
+          //meta-analyse here:
+          meta_analyse(working_id, working_rs, working_a1, working_a2, working_ps, working_betas,  working_betase, working_weights, working_mask, working_af, ifiles.size(), correlations, ofs);
+
+
+
+          working_a2.clear();
+          working_a1.clear();
+          working_weights.clear();
+          working_id.clear();
+          working_betas.clear();
+          working_betase.clear();
+          working_ps.clear();
+          working_rs.clear();
+          working_af.clear();
+          working_mask=0;
         }
-      }
-        //meta-analyse here:
-      meta_analyse(working_id, working_rs, working_a1, working_a2, working_ps, working_betas,  working_betase, working_weights, working_mask, working_af, ifiles.size(), correlations, ofs);
-
-
-
-      working_a2.clear();
-      working_a1.clear();
-      working_weights.clear();
-      working_id.clear();
-      working_betas.clear();
-      working_betase.clear();
-      working_ps.clear();
-      working_rs.clear();
-      working_af.clear();
-      working_mask=0;
+        min= min_element(currentPos.begin(),currentPos.end(),rsid_comparator);
+        if(rsid_comparator(*min, minimum)){error("At least one of the input files is unsorted: ", *min, "  <  ", minimum);}
+        minimum=*min;                                                                                                                                                                                                                                                      
+        if(minimum=="30:1"){break;}
+        correlations.update_minima(minimum);
+        continue;
     }
-    min= min_element(currentPos.begin(),currentPos.end(),rsid_comparator);
-    if(rsid_comparator(*min, minimum)){error("At least one of the input files is unsorted: ", *min, "  <  ", minimum);}
-    minimum=*min;                                                                                                                                                                                                                                                      
-    if(minimum=="30:1"){break;}
-    correlations.update_minima(minimum);
-    continue;
-  }
 
   output_record ord;
     //ord.rsid=id;
