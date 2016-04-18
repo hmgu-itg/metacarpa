@@ -27,36 +27,34 @@ Here is a short summary of METACARPA's options.
 METACARPA ( μ - 🐟  ): Meta-analysis in C++ Accounting for Relatedness using arbitrary Precision Arithmetic.
 ===========================================================================================================
 
-        NB: All arguments mandatory except column and -m arguments.
-        METACARPA currently supports only one header line in input files, which is ignored.
+        Usage : /nfs/users/nfs_a/ag15/metacarpa-git/src/metacarpa -I infile1[,size] [-I infile2[,size] ...] -O outfile --chr-col int --pos_col int --a1-col int--a2-col int --pval-col int --beta-col int --se-col int --af-col int [--size-col int] [--sep char] [--id-col int] [-m matrix_file] [-x] [-d]
+
+NB:     METACARPA currently supports only one header line in input files, which is ignored.
 
 Options description :
   --help                This help message.
-  -I [ --input ] arg    Input file.
-  -O [ --output ] arg   Output file.
-  -t [ --sep ] arg      Input field separator. Don't forget to quote if 
+  -I [ --input ] arg    (mandatory) Input file.
+  -O [ --output ] arg   (mandatory) Output file.
+  -c [ --chr-col ] arg  (mandatory) 1-based chromosome column number.
+  -q [ --pos-col ] arg  (mandatory) 1-based position column number.
+  -u [ --a1-col ] arg   (mandatory) 1-based column number for effect or
+                        reference allele.
+  -v [ --a2-col ] arg   (mandatory) 1-based column number for other allele.
+  -p [ --pval-col ] arg (mandatory) 1-based p-value column number.
+  -b [ --beta-col ] arg (mandatory) 1-based beta column number.
+  -s [ --se-col ] arg   (mandatory) 1-based beta-SE column number.
+  -a [ --af-col ] arg   (mandatory) 1-based effect allele frequency.
+  -n [ --size-col ] arg 1-based sample size column (if absent, sample sizes
+                        will be assumed constant and should be appended to
+                        input file names using a comma : -I infile,size).
+  -t [ --sep ] arg      Input field separator. Don't forget to quote if
                         necessary. Output field separator is always \t.
-  -c [ --chr-col ] arg  1-based chromosome column number.
-  -q [ --pos-col ] arg  1-based position column number.
-  -u [ --a1-col ] arg   1-based column number for effect or reference allele.
-  -v [ --a2-col ] arg   1-based column number for other allele.
-  -r [ --rsid-col ] arg 1-based column number for RSID or any other column that
-                        you want to keep.
-  -p [ --pval-col ] arg 1-based p-value column number.
-  -b [ --beta-col ] arg 1-based beta column number.
-  -s [ --se-col ] arg   1-based beta-SE column number.
-  -n [ --size-col ] arg 1-based sample size column (if absent, sample sizes 
-                        will be assumed constant and should be appended to 
-                        input file names using a comma : -I 
-                        [FILENAME],[SAMPLE_SIZE]).
-  -i [ --id-col ] arg   1-based ID column number (must be unique - e.g. 
+  -i [ --id-col ] arg   1-based RSID column number (should be unique - e.g.
                         chr:pos-A1-A2). If absent, chr:pos will be used.
   -m [ --matrix ] arg   Path to a METACARPA-generated correlation matrix array.
   -x [ --stop ]         Stop METACARPA after generating the matrix.
-  -d [ --debug ]        Toggles an extremely verbose output, for debugging 
-                        purposes.
-
-
+  -d [ --debug ]        Toggles an extremely verbose output, for debugging
+                        purposes only.
 ```
 
 ## Data preparation
