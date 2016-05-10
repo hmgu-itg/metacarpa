@@ -69,6 +69,8 @@ METACARPA supports any fixed-delimiter input file that has the column it require
 
 will run the meta-analysis on two studies with $1500$ and $2300$ samples respectively. If your input format contains the number of individuals genotyped at a particular position, remove the commas and sample sizes after the file name and replace by `-n sample_col`, where `sample_col` is the column number that contains this information.
 
+> **WARNING: ** The input files should be sorted according to chromosome and position.
+
 ## Field separators
 
 On some systems, it can be complicated to pass escaped characters such as tabs (`\t`) as parameters on the command line. In Bash, for example, you can circumvent this by telling the shell not to interpret the character, prefixing it with a dollar sign, like so: `$'\t'`.
