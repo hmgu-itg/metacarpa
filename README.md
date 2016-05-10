@@ -77,6 +77,7 @@ On some systems, it can be complicated to pass escaped characters such as tabs (
 
 ## Output format
 METACARPA produces an output with the following columns:
+
 * **rsid** : RSid, this should be equal to the ID column (argument -i) in the input.
 * **chr:pos** : SNPid.
 * **effect_allele** : Effect allele.
@@ -89,8 +90,8 @@ METACARPA produces an output with the following columns:
 * **zse** : Standard error of the z-score.
 * **p_wald** : Corrected p-value from the effect-size based meta-analysis. This is the preferred p-value to use.
 * **p_corrected** : Corrected p-value from the p-value based meta-analysis. This is the adapted p-value from Province and Borecki (2013).
-* **p_stouffer** : Stouffer p-value. This is an ** * uncorrected * ** p-value and should be used only for comparison purposes.
-
+* **p_stouffer** : Stouffer p-value. This is an ** _uncorrected_ ** p-value and should be used only for comparison purposes.
+ 
 ## Allele formatting
 METACARPA expects alleles in capital letters, small letters will be considered as different alleles. METACARPA implements allele flipping, but does not handle strand issues.
 
