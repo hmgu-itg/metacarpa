@@ -75,6 +75,25 @@ will run the meta-analysis on two studies with $1500$ and $2300$ samples respect
 
 On some systems, it can be complicated to pass escaped characters such as tabs (`\t`) as parameters on the command line. In Bash, for example, you can circumvent this by telling the shell not to interpret the character, prefixing it with a dollar sign, like so: `$'\t'`.
 
+## Output format
+METACARPA produces an output with the following columns:
+* **rsid** : RSid, this should be equal to the ID column (argument -i) in the input.
+* **chr:pos** : SNPid.
+* **effect_allele** : Effect allele.
+* **neffect_allele** : Non-effect allele.
+* **effect_allele_frequency** : Total effect allele frequency.
+* **effects** : Summary of directions of effect across files.
+* **beta** : Meta-analysis Effect.
+* **se** : Meta-analysis Standard error.
+* **z** : Meta-analysis Z-score.
+* **zse** : Standard error of the z-score.
+* **p_wald** : Corrected p-value from the effect-size based meta-analysis. This is the preferred p-value to use.
+* **p_corrected** : Corrected p-value from the p-value based meta-analysis. This is the adapted p-value from Province and Borecki (2013).
+* **p_stouffer** : Stouffer p-value. This is an ** * uncorrected * ** p-value and should be used only for comparison purposes.
+
+## Allele formatting
+METACARPA expects alleles in capital letters, small letters will be considered as different alleles. METACARPA implements allele flipping, but does not handle strand issues.
+
 ## Multiple runs
 
 METACARPA runs in two steps:
