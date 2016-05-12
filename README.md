@@ -18,7 +18,9 @@ METACARPA is compiled as a static Linux x64 executable. Running it should be as 
 
 ### Compilation
 
-The src directory contains a single source file and Makefile. The [Makefile](src/Makefile) is written for a compiler that supports C++ 11. Please note that you will also need a copy of the [Boost](http://www.boost.org) mathematical libraries on your machine (the binaries were compiled using Boost 1.55.0).
+The src directory contains a single source file and Makefile. The [Makefile](src/Makefile) is written for a compiler that supports C++ 11. Please note that you will also need a copy of the [Boost](http://www.boost.org) mathematical libraries on your machine (the binaries were compiled using Boost 1.60.0).
+
+After compiling the Boost libraries, you will be provided with the `-I` and `-L` arguments to change in the Makefile.
 
 ## Program Options
 
@@ -89,11 +91,20 @@ METACARPA produces an output with the following columns:
 * **z** : Meta-analysis Z-score.
 * **zse** : Standard error of the z-score.
 * **p_wald** : Corrected p-value from the effect-size based meta-analysis. This is the preferred p-value to use.
-* **p_corrected** : Corrected p-value from the p-value based meta-analysis. This is the adapted p-value from Province and Borecki (2013).
-* **p_stouffer** : Stouffer p-value. This is an ** _uncorrected_ ** p-value and should be used only for comparison purposes.
+* **p** : Corrected p-value from the p-value based meta-analysis. This is the adapted p-value from Province and Borecki (2013).
+* **p_fess** : Fixed effects inverse variance based p-value. This is an ** _uncorrected_ ** p-value and should be used only for comparison purposes.
+* **size** * : Total sample size for this variant
  
 ## Allele formatting
 METACARPA expects alleles in capital letters, small letters will be considered as different alleles. METACARPA implements allele flipping, but does not handle strand issues.
+
+## Arbitrary precision
+
+Some variants will trigger warnings of the form :
+```
+INFO:           Position chr:pos  could not be transformed with normal machine precision. Using arbitrary precision (p= 1e-29 )
+```
+This is normal behaviour, the program just informs you that it has to use more precision than usual because your p-values are low for that position.
 
 ## Multiple runs
 
