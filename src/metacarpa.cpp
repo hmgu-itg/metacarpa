@@ -136,6 +136,14 @@ void error(T t, Args... args) // recursive variadic function
   error_w(args...) ;
 }
 
+static bool find_alleles(std::vector<string> v, std::vector<string> u, string a, string b){
+  // Finds if {a, b} is present in {{u}, {v}}
+  if(v.size()!=u.size()){error("Internal error 02 (find_alleles): Vectors are of different sizes.");}
+  for(unsigned short int k=0;k<v.size();k++){
+    if(a==v[k] && b==u[k]){return true;}
+  }
+  return false;
+}
 
 inline long double somme(std::vector<long double> u){
   long double ret=0;
@@ -636,6 +644,18 @@ public:
 
 };
 
+static inline string get_readable_mask(unsigned short int mask, unsigned short int numstudies) {
+  string ret;
+    for(unsigned short int i=0; i<numstudies;i++){
+    if((mask & (1<<i)) == 0){
+      ret.append(" \u274C");
+    }else{
+      ret.append(" \u2705");
+    }
+  }
+  return ret;
+}
+
 template <class T>
 inline string vtostring(std::vector<T> v){
   string rval;
@@ -787,6 +807,7 @@ inline void meta_analyse(std::vector<string> working_id, std::vector<string> wor
       //compute matrix for beta weights
       //info("Working mask ", working_mask);
     ublas::matrix<long double> c=correlations.getmat(working_mask);
+    if(c.size1()==0){error("Not enough variants with mask", get_readable_mask(working_mask, numstudies), ". Increase number of variants used to calculate the matrix, or check for allele issues (error occurred at position ",ord.chrpos,").");}
     for(i=0;i<c.size1();i++){
       for(unsigned short int j=0;j<c.size1();j++){
         if(i>j){c(i,j)=c(j,i);}else if (i==j){c(i,j)=1;}
@@ -806,6 +827,7 @@ inline void meta_analyse(std::vector<string> working_id, std::vector<string> wor
 
       // calculate betase
       std::vector<long double> working_var=produit(working_betase, working_betase);
+
     ord.betase=sqrt(somme(produit(produit(working_weights, working_weights), working_var)) + produit_reciproque_asymetrique(c, working_weights));
 
       // meta-beta
@@ -829,7 +851,7 @@ inline void meta_analyse(std::vector<string> working_id, std::vector<string> wor
 
      }
    } catch(exception e){
-    ord.p=2*(cdf(correctednormal, -1*abs(ord.z)));
+    ord.p=2*(cdf(correctednormal, -1*abs(ord.z.convert_to<long double>())));
     ord.p_wald=2*cdf(wald_p, -1*abs(ord.beta/ord.betase));
     ord.p_fess=2*cdf(wald_p, -1*abs(ord.z_fess));
   }
@@ -1298,12 +1320,16 @@ int main(int argc, char* argv[])
     std::vector<float> working_af;
     unsigned int working_mask=0;
 
+    std::vector<string> alternative_a1;
+    std::vector<string> alternative_a2;
+
     string match_a1="";
     string match_a2="";
     bool catastrophe=false;
     for(unsigned short int j=0;j<currentPos.size();j++){
       if(currentPos[j]==minimum){
         if(match_a1==""){match_a1=currentA1[j];match_a2=currentA2[j];continue;}
+        // if(alternative_a1.size()==0){alternative_a1.push_back(currentA1[j]);alternative_a2.push_back(currentA2[j]);continue;}
         if(currentA1[j] != match_a1 || currentA2[j]!=match_a2){
           if(VERBOSE){info("STOP: ", currentPos[j], minimum, match_a1, currentA1[j], match_a2, currentA2[j]);}
           if(currentA1[j]==match_a2 && currentA2[j]==match_a1){
@@ -1315,8 +1341,11 @@ int main(int argc, char* argv[])
           }else{
         // there is an allele mismatch
           catastrophe=true;
-          break;
+         // break; <- commenting this line ensures all allele flips happen before allele mismatches are treated
         }
+
+        // Add alternate alleles to vectors.
+         
         }
       }
     }
