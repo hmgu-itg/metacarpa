@@ -75,6 +75,8 @@ using namespace boost::multiprecision;
 using namespace std;
 
 typedef number<cpp_dec_float<200> > cpp_dec_float_1000;
+typedef number<cpp_dec_float<500> > cpp_dec_float_mid;
+typedef number<cpp_dec_float<1000> > cpp_dec_float_hi;
 
 
 //void info(std::string s){
@@ -269,79 +271,112 @@ static bool sign_beta(long double beta){
 
 static bool b_transform(long double p, string rsid){
   boost::math::normal_distribution<long double>  standardnormal(0.0, 1.0);
-  boost::math::normal_distribution<cpp_dec_float_1000>  standardnormal_p(0.0, 1.0); 
-  cpp_dec_float_1000 zf;
-  if(p==1){zf=-1*static_cast<cpp_dec_float_1000>("-inf");return(1);}
-  bool bpval;
-  try
-  {
-    zf=(cpp_dec_float_1000)(quantile(standardnormal, 1-p));
-    bpval=(zf<=0);
+  if(p==1) return true;
+  try {
+    return (quantile(standardnormal, 1-p) <= 0);
   }catch(exception &ex){
     info("\tPosition ",rsid," could not be transformed with normal machine precision. Using arbitrary precision (p=",p,")");
-    cpp_dec_float_1000 p1=1-(cpp_dec_float_1000)p;
-    zf=quantile(standardnormal_p, p1);
-    bpval=(zf<=0);
+    try{
+      boost::math::normal_distribution<cpp_dec_float_1000>  nd(0.0, 1.0);
+      return (quantile(nd, 1-(cpp_dec_float_1000)p) <= 0);
+    }catch(exception &ex2){
+      try{
+        boost::math::normal_distribution<cpp_dec_float_mid>  nd(0.0, 1.0);
+        return (quantile(nd, 1-(cpp_dec_float_mid)p) <= 0);
+      }catch(exception &ex3){
+        try{
+          boost::math::normal_distribution<cpp_dec_float_hi>  nd(0.0, 1.0);
+          return (quantile(nd, 1-(cpp_dec_float_hi)p) <= 0);
+        }catch(exception &ex4){
+          // All tiers exhausted; result is unambiguous for extreme p
+          return (p >= 0.5);
+        }
+      }
+    }
   }
-  return bpval;
 }
 
 static cpp_dec_float_1000 z_transform(long double p, long double beta, string rsid){
   boost::math::normal_distribution<long double>  standardnormal(0.0, 1.0);
-  boost::math::normal_distribution<cpp_dec_float_1000>  standardnormal_p(0.0, 1.0);
-
-  cpp_dec_float_1000 zf;
   int sign=beta>0?1:-1;
-  if(p==1){zf=-1*static_cast<cpp_dec_float_1000>("-inf");return(1);}
-  bool bpval;
-  try
-  {
-    zf=(cpp_dec_float_1000)(quantile(standardnormal, 1-p/2)*sign);
-  }
-  catch(exception &ex){
+  if(p==1) return (cpp_dec_float_1000)1;
+  try {
+    return (cpp_dec_float_1000)(quantile(standardnormal, 1-p/2)*sign);
+  }catch(exception &ex){
     info("\tPosition ",rsid," could not be transformed with normal machine precision. Using arbitrary precision (p=",p,")");
-    cpp_dec_float_1000 p1=1-(cpp_dec_float_1000)p/2;
-    zf=quantile(standardnormal_p, p1)*sign;
+    try{
+      boost::math::normal_distribution<cpp_dec_float_1000>  nd(0.0, 1.0);
+      return (cpp_dec_float_1000)(quantile(nd, 1-(cpp_dec_float_1000)p/2)*sign);
+    }catch(exception &ex2){
+      try{
+        boost::math::normal_distribution<cpp_dec_float_mid>  nd(0.0, 1.0);
+        return (cpp_dec_float_1000)(quantile(nd, 1-(cpp_dec_float_mid)p/2)*sign);
+      }catch(exception &ex3){
+        try{
+          boost::math::normal_distribution<cpp_dec_float_hi>  nd(0.0, 1.0);
+          return (cpp_dec_float_1000)(quantile(nd, 1-(cpp_dec_float_hi)p/2)*sign);
+        }catch(exception &ex4){
+          info("\tPosition ",rsid," overflows all precision tiers. Capping z-score at +/-38.");
+          return (cpp_dec_float_1000)(38.0)*sign;
+        }
+      }
+    }
   }
-  return zf;
 }
 
 static cpp_dec_float_1000 z_transform_fess(long double p, long double beta, string rsid){
   boost::math::normal_distribution<long double>  standardnormal(0.0, 1.0);
-  boost::math::normal_distribution<cpp_dec_float_1000>  standardnormal_p(0.0, 1.0);
-  cpp_dec_float_1000 zf;
   int sign=beta>=0?1:-1;
-  if(p==1){zf=-1*static_cast<cpp_dec_float_1000>("-inf");return(1);}
-  bool bpval;
-  try
-  {
-    zf=(cpp_dec_float_1000)(quantile(standardnormal, p/2)*sign);
-  }
-  catch(exception &ex){
+  if(p==1) return (cpp_dec_float_1000)1;
+  try {
+    return (cpp_dec_float_1000)(quantile(standardnormal, p/2)*sign);
+  }catch(exception &ex){
     info("\tPosition ",rsid," could not be transformed with normal machine precision. Using arbitrary precision (p=",p,")");
-    cpp_dec_float_1000 p1=(cpp_dec_float_1000)p/2;
-    zf=quantile(standardnormal_p, p1)*sign;
+    try{
+      boost::math::normal_distribution<cpp_dec_float_1000>  nd(0.0, 1.0);
+      return (cpp_dec_float_1000)(quantile(nd, (cpp_dec_float_1000)p/2)*sign);
+    }catch(exception &ex2){
+      try{
+        boost::math::normal_distribution<cpp_dec_float_mid>  nd(0.0, 1.0);
+        return (cpp_dec_float_1000)(quantile(nd, (cpp_dec_float_mid)p/2)*sign);
+      }catch(exception &ex3){
+        try{
+          boost::math::normal_distribution<cpp_dec_float_hi>  nd(0.0, 1.0);
+          return (cpp_dec_float_1000)(quantile(nd, (cpp_dec_float_hi)p/2)*sign);
+        }catch(exception &ex4){
+          info("\tPosition ",rsid," overflows all precision tiers. Capping z-score at +/-38.");
+          return (cpp_dec_float_1000)(-38.0)*sign;
+        }
+      }
+    }
   }
-  return zf;
 }
-
 
 static cpp_dec_float_1000 z_transform(long double p, string rsid){
- boost::math::normal_distribution<long double>  standardnormal(0.0, 1.0);
- boost::math::normal_distribution<cpp_dec_float_1000>  standardnormal_p(0.0, 1.0);
- cpp_dec_float_1000 zf;
- if(p==1){zf=-1*static_cast<cpp_dec_float_1000>("-inf");return(1);}
- bool bpval;
- try
- {
-  zf=(cpp_dec_float_1000)(quantile(standardnormal, 1-p));
-}
-catch(exception &ex){
-  info("\tPosition ",rsid," could not be transformed with normal machine precision. Using arbitrary precision (p=",p,")");
-  cpp_dec_float_1000 p1=1-(cpp_dec_float_1000)p;
-  zf=quantile(standardnormal_p, p1);
-}
-return zf;
+  boost::math::normal_distribution<long double>  standardnormal(0.0, 1.0);
+  if(p==1) return (cpp_dec_float_1000)1;
+  try {
+    return (cpp_dec_float_1000)(quantile(standardnormal, 1-p));
+  }catch(exception &ex){
+    info("\tPosition ",rsid," could not be transformed with normal machine precision. Using arbitrary precision (p=",p,")");
+    try{
+      boost::math::normal_distribution<cpp_dec_float_1000>  nd(0.0, 1.0);
+      return (cpp_dec_float_1000)(quantile(nd, 1-(cpp_dec_float_1000)p));
+    }catch(exception &ex2){
+      try{
+        boost::math::normal_distribution<cpp_dec_float_mid>  nd(0.0, 1.0);
+        return (cpp_dec_float_1000)(quantile(nd, 1-(cpp_dec_float_mid)p));
+      }catch(exception &ex3){
+        try{
+          boost::math::normal_distribution<cpp_dec_float_hi>  nd(0.0, 1.0);
+          return (cpp_dec_float_1000)(quantile(nd, 1-(cpp_dec_float_hi)p));
+        }catch(exception &ex4){
+          info("\tPosition ",rsid," overflows all precision tiers.");
+          return (cpp_dec_float_1000)(38.0);
+        }
+      }
+    }
+  }
 }
 
 
@@ -891,6 +926,7 @@ int RAND_ID=0;
 int AF_COL=-1;
 int STEP=1;
 bool SZTOPP=false;
+bool USE_BETA_SIGN=false;
 string MATRIX="";
 string OUTFILE="";
 
@@ -933,6 +969,7 @@ NB:\tMETACARPA currently supports only one header line in input files, which is 
  ("matrix,m", po::value<string>(), "Path to a METACARPA-generated correlation matrix array.")
  ("stop,x", "Stop METACARPA after generating the matrix.")
  ("debug,d", "Toggles an extremely verbose output, for debugging purposes only.")
+ ("use-beta-sign", "Use sign of beta for dichotomization in correlation matrix calculation (as described in Southam et al. 2017), instead of the default p-value transform.")
 
 
   //    ("ss1,1", po::value<int>(), "Sample size for study 1 (in order of join).")
@@ -1027,6 +1064,10 @@ if(vm.count("stop")){
   SZTOPP=true;
 }
 
+if(vm.count("use-beta-sign")){
+  USE_BETA_SIGN=true;
+  info("Using sign of beta for dichotomization (Southam et al. 2017 method).");
+}
 
 if (vm.count("input") && vm.count("output")) {
   ifiles=vm["input"].as<vector<string>>();
@@ -1059,7 +1100,7 @@ if (vm.count("input") && vm.count("output")) {
   info("Writing to "+OUTFILE);
   info("METACARPA ( μ - 🐟  ) successfully initialised.");
 }
-
+return 0;
 }
 
 int main(int argc, char* argv[])
@@ -1136,6 +1177,9 @@ int main(int argc, char* argv[])
 
     while(1){
       if(VERBOSE){info("Treating variant ",poscount, ", minimum at ",minimum);}
+      // Allele harmonization for first pass (needed for beta-sign method)
+      string match_a1_pass1="";
+      string match_a2_pass1="";
       for(unsigned short int j=0;j<currentPos.size();j++){
       // look for the minimum in the vector.
       // When found, convert p-value
@@ -1144,8 +1188,20 @@ int main(int argc, char* argv[])
         if(currentPos[j]==minimum){
           string tempLine;
         //info("j=",j);
-        correlations.add_minimum(currentPos[j],currentPval[j],pow(2,j));
-          //if(STEP==1 || (poscount % STEP)==0) {correlations.add_minimum_beta(currentPos[j],currentBeta[j],pow(2,j));}
+        if(USE_BETA_SIGN){
+          long double beta_for_sign = currentBeta[j];
+          if(match_a1_pass1==""){
+            match_a1_pass1=currentA1[j];
+            match_a2_pass1=currentA2[j];
+          } else if(currentA1[j]==match_a2_pass1 && currentA2[j]==match_a1_pass1){
+            // Alleles are flipped relative to first file: negate beta
+            beta_for_sign = -currentBeta[j];
+            if(VERBOSE){info("First pass allele flip at ",currentPos[j]);}
+          }
+          correlations.add_minimum_beta(currentPos[j],beta_for_sign,pow(2,j));
+        }else{
+          correlations.add_minimum(currentPos[j],currentPval[j],pow(2,j));
+        }
           if(!getline(*(filestreams[j]), tempLine, '\n')){currentPos[j]="30:1"; info("Read ",counts[j], " lines from file ", ifiles[j],".");eofs[j]=true;continue;}
 
           std::vector <string> line;

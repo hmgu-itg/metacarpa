@@ -15,9 +15,24 @@ METACARPA is compiled as a static Linux x64 executable. You can download it in t
 
 ### Compilation
 
-The src directory contains a single source file and Makefile. The [Makefile](src/Makefile) is written for a compiler that supports C++ 11. Please note that you will also need a copy of the [Boost](http://www.boost.org) mathematical libraries on your machine (the binaries were compiled using Boost 1.60.0).
+The src directory contains a single source file and Makefile. A C++11 compiler and [Boost](http://www.boost.org) 1.60.0+ are required (headers + `program_options` and `serialization` libraries).
 
-After compiling the Boost libraries, you will be provided with the `-I` and `-L` arguments to change in the Makefile.
+On Debian/Ubuntu:
+```bash
+sudo apt-get install libboost-program-options-dev libboost-serialization-dev
+```
+
+Then build:
+```bash
+cd src && make
+```
+
+The Makefile expects Boost headers in `/usr/include` and libraries in `lib/` (relative to `src/`). Adjust `IDIR` and `LDIR` in the Makefile if your Boost installation is elsewhere.
+
+For a static binary (no runtime dependencies):
+```bash
+cd src && c++ -O3 -std=c++11 -static -I/usr/include -L/usr/lib/x86_64-linux-gnu -o metacarpa metacarpa.cpp -lboost_program_options -lboost_serialization -lpthread
+```
 
 ## Program Options
 
@@ -54,6 +69,9 @@ Options description :
   -x [ --stop ]         Stop METACARPA after generating the matrix.
   -d [ --debug ]        Toggles an extremely verbose output, for debugging
                         purposes only.
+  --use-beta-sign       Use sign of beta for dichotomization in correlation
+                        matrix calculation (Southam et al. 2017), instead of
+                        the default p-value transform. Recommended.
 ```
 
 ## Data preparation
