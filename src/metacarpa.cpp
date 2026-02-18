@@ -24,6 +24,7 @@
 
 namespace ublas = boost::numeric::ublas;
 bool VERBOSE=false;
+double DIGBY_EXPONENT=0.7853981633974483; // pi/4
  /* Matrix inversion routine.
     Uses lu_factorize and lu_substitute in uBLAS to invert a matrix */
  template<class T>
@@ -189,7 +190,7 @@ inline long double produit_reciproque_asymetrique(boost::numeric::ublas::matrix<
       ret+= addendum;
     }
   }
-  return ret;
+  return 2*ret;
 }
 
 // inline std::vector<long double> produit(std::vector<long double>& u, std::vector<long double>& v) {
@@ -665,7 +666,7 @@ public:
         for(unsigned int j=i+1;j<nstudies;j++){
           long double alpha=m(i,j).get_alpha();
           if(VERBOSE){info("between study ",i,"and",j, " the alpha is ",alpha);}
-          correlations[mask](i,j)=(pow(alpha, 0.75)-1)/(pow(alpha, 0.75)+1);
+          correlations[mask](i,j)=(pow(alpha, DIGBY_EXPONENT)-1)/(pow(alpha, DIGBY_EXPONENT)+1);
           if(correlations[mask](i,j)==-1){correlations[mask](i,j)=0;}
         }
       }
@@ -970,6 +971,7 @@ NB:\tMETACARPA currently supports only one header line in input files, which is 
  ("stop,x", "Stop METACARPA after generating the matrix.")
  ("debug,d", "Toggles an extremely verbose output, for debugging purposes only.")
  ("use-beta-sign", "Use sign of beta for dichotomization in correlation matrix calculation (as described in Southam et al. 2017), instead of the default p-value transform.")
+ ("digby-exponent", po::value<double>(), "Exponent used in Digby's tetrachoric correlation approximation: rho = (alpha^e - 1)/(alpha^e + 1). Default: pi/4 = 0.7854.")
 
 
   //    ("ss1,1", po::value<int>(), "Sample size for study 1 (in order of join).")
@@ -1067,6 +1069,11 @@ if(vm.count("stop")){
 if(vm.count("use-beta-sign")){
   USE_BETA_SIGN=true;
   info("Using sign of beta for dichotomization (Southam et al. 2017 method).");
+}
+
+if(vm.count("digby-exponent")){
+  DIGBY_EXPONENT=vm["digby-exponent"].as<double>();
+  info("Using Digby exponent = "+to_string(DIGBY_EXPONENT));
 }
 
 if (vm.count("input") && vm.count("output")) {
@@ -1600,307 +1607,3 @@ info("Goodbye.");
 return 0;
 
 }
-
-
-
-// DEFUNCT CODE
-// OLD BODY OF META_ANALYSE (WITH COMMENTS)
-
-
-  //   ord.chrpos=working_rs[0];
-  //   ord.rsid=working_id[0];
-  //   ord.a1=working_a1[0];
-  //   ord.a2=working_a2[0];
-
-  //   unsigned int j=0;
-  //   for(unsigned short int i=0; i<ifiles.size();i++){
-  //     if((working_mask & (1<<i)) == 0){
-  //       ord.status.push_back('?');
-  //     }else{
-  //     //if((mask & mask-1)==0){error("mask is a power of two: "+to_string(mask)+" whereas i="+to_string(i)+" and maskcheck is "+to_string(1<<i));}
-  //       char effect_dir=working_betas[j] > 0? '+' : '-';
-  //       j++;
-  //       ord.status.push_back(effect_dir);
-  //     }
-  //   }
-
-  //   if(bit_count(working_mask)>1){
-  //     // compute weights
-  //     int sum_ss=somme(working_weights);
-  //     i=0;
-  //     //for(long double l : working_weights){working_weights[i]/=sum_ss;i++;}
-
-  //     for(long double l : working_weights){working_weights[i]=sqrt(working_weights[i]);working_weights[i]/=sqrt(sum_ss);i++;}
-
-
-  //     // compute transforms and sum thereof
-  //       i=0;
-  //     vector<cpp_dec_float_1000> zs(working_weights.size());
-  //     vector<cpp_dec_float_1000> zs_fess(working_weights.size());
-  //     for(long double l : working_ps){
-  //       zs[i]=z_transform_fess(working_ps[i], working_betas[i],working_rs[i]);
-  //       zs_fess[i]=z_transform_fess(working_ps[i], working_betas[i],working_rs[i]);
-  //       i++;
-  //     }
-  //     ord.z=somme(produit(zs, working_weights));
-
-
-  //     ord.z_fess=somme(produit(zs_fess, working_weights));
-  //     // compute p-value SD
-  //     // the first product in the line below sums to 1 by definition
-  //     //ord.zse=sqrt(somme(produit(working_weights, working_weights))+produit_reciproque_asymetrique(correlations.getmat(working_mask), working_weights));
-  //     ord.zse=sqrt(1+produit_reciproque_asymetrique(correlations.getmat(working_mask), working_weights));
-
-
-  //     //compute matrix for beta weights
-  //     //info("Working mask ", working_mask);
-  //     ublas::matrix<long double> c=correlations.getmat(working_mask);
-  //     for(i=0;i<c.size1();i++){
-  //       for(unsigned short int j=0;j<c.size1();j++){
-  //         if(i>j){c(i,j)=c(j,i);}else if (i==j){c(i,j)=1;}
-  //         c(i,j)=c(i,j)*working_betase[i]*working_betase[j];
-  //       }
-  //     }
-  //     // calculate weights
-  //     //    * sum of columns/total sum of matrix
-  //     ublas::matrix<long double> inverse(c.size1(),c.size1());
-
-  //     if(!InvertMatrix(c,inverse)){correlations.print(c);error("Could not invert variance/covariance matrix.");}
-
-  //     working_weights=colsum(inverse);
-  //     long double totsum=somme(working_weights);
-  //     for(i=0;i<working_weights.size();i++) working_weights[i]/=totsum;
-
-  //     // calculate betase
-  //       std::vector<long double> working_var=produit(working_betase, working_betase);
-  //     ord.betase=sqrt(somme(produit(produit(working_weights, working_weights), working_var)) + produit_reciproque_asymetrique(c, working_weights));
-
-  //     // meta-beta
-  //     ord.beta=somme(produit(working_weights, working_betas));
-  //         // compute meta-analysis p-value
-  //     boost::math::normal_distribution<long double>  correctednormal(0.0, ord.zse);
-  //     boost::math::normal_distribution<cpp_dec_float_1000>  correctednormal_p(0.0, ord.zse);
-  //     boost::math::normal_distribution<long double>  wald(0.0, 1);
-  //     boost::math::normal_distribution<cpp_dec_float_1000>  wald_p(0.0, 1);
-
-  //     try{
-  //      ord.p=2*(cdf(correctednormal, -1*abs(static_cast<long double>(ord.z))));
-  //      //ord.p_uncorrected=2*(1-cdf(wald, abs(static_cast<long double>(ord.z))));
-  //       //ord.p=1-cdf(correctednormal, -1*abs(static_cast<long double>(ord.z)));
-  //       // ord.p_uncorrected=1-cdf(wald, -1*abs(static_cast<long double>(ord.z)));
-  //      ord.p_fess=2*cdf(wald, -1*abs(static_cast<long double>(ord.z_fess)));
-  //      //ord.p=1-cdf(correctednormal, static_cast<long double>(ord.z));
-  //       // ord.p_uncorrected=1-cdf(wald, static_cast<long double>(ord.z));
-  //      ord.p_wald=2*cdf(wald, -1*abs(ord.beta/ord.betase));
-  //      if(ord.p==0){
-
-  //         //info("Warning, position "+minimum+" meta-analyses below long double precision. Analysing with multiprecision...");
-  //          //ord.p =1-cdf(correctednormal_p, -1*abs(ord.z));
-  //        //ord.p =1-cdf(correctednormal_p, ord.z);
-  //         // ord.p_uncorrected=1-cdf(wald_p, abs(ord.z));
-  //        ord.p_wald=2*cdf(wald_p, -1*abs(ord.beta/ord.betase));
-  //        ord.p=2*(cdf(correctednormal_p, -1*abs(ord.z)));
-  //        ord.p_fess=2*cdf(wald_p, -1*abs(ord.z_fess));
-  //        //ord.p_uncorrected=2*(1-cdf(correctednormal_p, abs(ord.z)));
-
-  //      }
-  //    }catch(exception e){
-  //       // ord.p=1-cdf(correctednormal_p, -1*abs(ord.z));
-  //     //ord.p=1-cdf(correctednormal_p, ord.z);
-  //       // ord.p_uncorrected=1-cdf(wald_p, -1*abs(ord.z));
-  //     ord.p=2*(cdf(correctednormal, -1*abs(ord.z)));
-  //     //ord.p_uncorrected=2*(1-cdf(wald_p, abs(ord.z)));
-  //     ord.p_wald=2*cdf(wald_p, -1*abs(ord.beta/ord.betase));
-  //     ord.p_fess=2*cdf(wald_p, -1*abs(ord.z_fess));
-  //   }
-
-  // }else{
-  //     // SNP present in only 1 study, skip all calculations
-  //   ord.rsid=working_id[0];
-  //   ord.beta=working_betas[0];
-  //   ord.betase=working_betase[0];
-  //   ord.p=-1;
-  //   ord.p_wald=-1;
-  //   ord.p_fess=-1;
-  //   ord.z=-1;
-  //   ord.zse=-1;
-  //   ord.p_uncorrected=-1;
-  //   ord.a1=working_a1[0];
-  //   ord.a2=working_a2[0];
-  // }
-  // ord.print(ofs);
-  /*
-  map <string, position_info, cmp_rsid> thisstudy;
-  bool firstline=true;
-  info("Calculating z-scores and binomial transformation for file "+filename+"...");
-  string tempLine;
-  boost::math::normal_distribution<long double>  standardnormal;
-  boost::math::normal_distribution<cpp_dec_float_1000>  standardnormal_p;
-  means[i]=0;
-  while ( getline(inputFile, tempLine, '\n') ) {
-    if(firstline==true){firstline=false;continue;}
-    vector <string> line;
-    stringstream ss(tempLine);
-    string temp;
-    while (getline(ss, temp, '\t')) {  
-      line.push_back(temp);
-    }
-    string chrpos=line[0]+":"+line[2];
-    position_info thisposition;
-      //thisposition.beta=stold(line[7]);
-      //means[i]=means[i]+thisposition.beta;
-      //meancount[i]++;
-      //thisposition.sdbeta=stold(line[8]);
-    thisposition.pvalue=stold(line[13]);
-    thisposition.rsid=line[1];
-    try
-    {
-      thisposition.zf=(cpp_dec_float_1000)(quantile(standardnormal, 1-thisposition.pvalue/2)*sign(thisposition.beta));
-      thisposition.bpval=(thisposition.zf<=0);
-      thisposition.need_precision=false;
-    }catch(exception &ex){
-      thisposition.need_precision=true;
-      info("\tPosition "+chrpos+" could not be transformed with normal machine precision. Using arbitrary precision (p="+line[13]+")");
-      cpp_dec_float_1000 p1=1-(cpp_dec_float_1000)thisposition.pvalue/2;
-      thisposition.zf=quantile(standardnormal_p, p1)*sign(thisposition.beta);
-      thisposition.bpval=(thisposition.zf<=0);
-    }
-
-    thisstudy[chrpos]=thisposition;
-    if(where_present.count(chrpos)==0){
-      where_present[chrpos]=current_mask;  
-    }else{
-      where_present[chrpos]=where_present[chrpos] | current_mask;
-    }
-
-  }
-  studydata.push_back(thisstudy);
-  means[i]=means[i]/meancount[i];
-    // This is the mean beta for the whole of the file
-    // It can be quite different from the mean calculated on overlapping positions only
-  info("Mean effect for file "+s+" is "+to_string(means[i])+" ("+to_string(meancount[i])+" rows)");
-  i++;
-});
-int removed=0;
-
-
-
-  // All studies have been read. Do we have positions only present in one study?
-// typedef map <string, unsigned short int, cmp_rsid>::iterator it_type;
-// for(it_type it =where_present.begin(); it != where_present.end();){
-//   unsigned short int mask=it->second;
-//   if((mask & mask-1)==0){removed++;}
-//   ++it;
-// }
-// info(to_string(removed)+" positions were only genotyped in one study. Sadly, they will be lost.");
-
-
-// Time to compute relatedness matrix.
-// This calculates the correlations using the binomially tansformed betas.
-// It is the main innovation introduced by Province and Borecki
-info("Calculating p-value correlation matrix...");
-vector<vector<long double>> cormat(ifiles.size(), vector<long double>(ifiles.size(), 0));
-i=0;
-vector<long double> sds(ifiles.size(), 0);
-vector<bool> done(ifiles.size(), false);
-vector<int> counts(ifiles.size(), 0);
-for_each(ifiles.begin(), ifiles.end(), [&](string s)-> void {
-  unsigned short int j=i+1;
-  unsigned short int expj=1<<j;
-  unsigned short int expi=1<<i;
-  for_each(next(ifiles.begin(),i+1), ifiles.end(), [&](string t)-> void {
-        // get all positions that have at least these two studies in common
-    info("between file "+s+" and file "+t);
-    if (i==j){cormat[i][j]=1;}else{
-      typedef map <string, unsigned short int, cmp_rsid>::iterator it_type;
-      vector<bool> a;
-      vector<bool> b;
-      for(it_type it =where_present.begin(); it != where_present.end();){
-        unsigned short int mask=it->second;
-        string chrpos=it->first;
-        // Here we calculate SDs for entire studies...
-        //      info("Treating position "+chrpos+" with mask "+to_string(mask));
-        if(!done[j] && (mask & expj)==expj){sds[j]=sds[j]+(studydata[j][chrpos].beta-means[j])*(studydata[j][chrpos].beta-means[j]);counts[j]++;}
-        if(!done[i] && (mask & expi)==expi){sds[i]=sds[i]+(studydata[i][chrpos].beta-means[i])*(studydata[i][chrpos].beta-means[i]);counts[i]++;}
-        if((mask & expj)==expj && (mask & expi)==expi){
-        //            info("Position "+chrpos+" is present in both studies.");
-          a.push_back(studydata[i][chrpos].bpval);
-          b.push_back(studydata[j][chrpos].bpval);
-
-        }
-        ++it;
-      }
-      done[j]=true;
-      done[i]=true;
-
-      cormat[i][j]=tetrachoric(a,b);
-
-    }
-    info("\t...is "+to_string(cormat[i][j]));
-    j++;
-  });
-i++;
-});
-studies_correlation sc=studies_correlation();
-sc.add_mask((unsigned short int)3);
-bool v[]={true, true};
-sc.update_mask((unsigned short int)3, v);
-v[1]=false;
-sc.update_mask((unsigned short int)3, v);
-v[0]=false;
-sc.update_mask((unsigned short int)3, v);
-v[0]=true;
-sc.update_mask((unsigned short int)3, v);
-v[1]=true;
-sc.update_mask((unsigned short int)3, v);
-v[0]=false;
-sc.update_mask((unsigned short int)3, v);
-v[1]=false;
-sc.update_mask((unsigned short int)3, v);
-sc.update_mask((unsigned short int)3, v);
-v[0]=true;
-v[1]=true;
-sc.update_mask((unsigned short int)3, v);
-v[0]=false;
-sc.update_mask((unsigned short int)3, v);
-v[1]=true;
-v[0]=true;
-sc.update_mask((unsigned short int)3, v);
-v[0]=false;
-sc.update_mask((unsigned short int)3, v);
-v[1]=false;
-sc.update_mask((unsigned short int)3, v);
-sc.update_mask((unsigned short int)3, v);
-
-
-
-
-sc.compute_correlations();
-
-sc.write("test_serial");
-
-studies_correlation scr=studies_correlation();
-scr.read("test_serial");
-info(scr.getmat((unsigned short int)3));
-*/
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
