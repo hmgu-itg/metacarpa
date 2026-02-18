@@ -1,5 +1,41 @@
 # Changelog
 
+## v1.2.0
+
+### Breaking change: `--use-beta-sign` removed
+
+The sign-of-beta dichotomization method (Southam et al. 2017) is now always
+used for correlation matrix estimation. The old p-value transform method
+(`b_transform(p) = Phi^{-1}(1-p) <= 0`) severely underestimated the
+inter-study correlation and has been removed along with the `--use-beta-sign`
+flag that was introduced in v1.1.0.
+
+### Bug fix: missing factor of 2 in variance formula
+
+`produit_reciproque_asymetrique()` computes `sum_{k<l} w_k w_l rho_{kl}` by
+iterating over the upper triangle of the symmetric correlation matrix. However,
+the full off-diagonal sum is `2 * sum_{k<l} w_k w_l rho_{kl}`. The missing
+factor of 2 caused the corrected z-score standard error and the beta standard
+error to be underestimated, inflating type 1 error rates under sample overlap.
+
+Credit: Brady Ryan (University of Michigan) identified this bug.
+
+### Bug fix: Digby tetrachoric exponent
+
+The Digby approximation for tetrachoric correlation used an exponent of 0.75,
+but the correct value is pi/4 (0.7854). This caused systematic negative bias
+in correlation estimates (e.g. bias of -0.02 at rho=0.5 with the old exponent
+vs -0.003 with pi/4).
+
+The default is now pi/4. A new `--digby-exponent` CLI option allows overriding
+this value (e.g. `--digby-exponent 0.75` to restore the old behaviour).
+
+### Code cleanup
+
+Removed ~300 lines of dead code: commented-out legacy meta-analysis body,
+2-study prototype with undefined `tetrachoric()` function call, and the
+now-unused `b_transform()` and `add_minimum()` functions.
+
 ## v1.1.0
 
 ### Bug fix: dichotomization method for correlation estimation
