@@ -270,32 +270,6 @@ static bool sign_beta(long double beta){
   return beta >=0;
 }
 
-static bool b_transform(long double p, string rsid){
-  boost::math::normal_distribution<long double>  standardnormal(0.0, 1.0);
-  if(p==1) return true;
-  try {
-    return (quantile(standardnormal, 1-p) <= 0);
-  }catch(exception &ex){
-    info("\tPosition ",rsid," could not be transformed with normal machine precision. Using arbitrary precision (p=",p,")");
-    try{
-      boost::math::normal_distribution<cpp_dec_float_1000>  nd(0.0, 1.0);
-      return (quantile(nd, 1-(cpp_dec_float_1000)p) <= 0);
-    }catch(exception &ex2){
-      try{
-        boost::math::normal_distribution<cpp_dec_float_mid>  nd(0.0, 1.0);
-        return (quantile(nd, 1-(cpp_dec_float_mid)p) <= 0);
-      }catch(exception &ex3){
-        try{
-          boost::math::normal_distribution<cpp_dec_float_hi>  nd(0.0, 1.0);
-          return (quantile(nd, 1-(cpp_dec_float_hi)p) <= 0);
-        }catch(exception &ex4){
-          // All tiers exhausted; result is unambiguous for extreme p
-          return (p >= 0.5);
-        }
-      }
-    }
-  }
-}
 
 static cpp_dec_float_1000 z_transform(long double p, long double beta, string rsid){
   boost::math::normal_distribution<long double>  standardnormal(0.0, 1.0);
@@ -492,16 +466,6 @@ public:
     curbp.push_back(sign_beta(beta));
   }
 
-  void add_minimum(string rsid, long double p, unsigned short int study){
-    if(curmax==""){curmax=rsid;}
-    if(curmax != rsid){
-      error("INTERNAL/add_maximum called before update_minima (", curmax, " vs ",rsid,") .\n");
-    }
-    // update mask
-    curmask|=study;
-    // update vector of transformed p-values
-    curbp.push_back(b_transform(p, rsid));
-  }
 
   void update_minima(string maximum){
     curmax=maximum;
@@ -927,7 +891,6 @@ int RAND_ID=0;
 int AF_COL=-1;
 int STEP=1;
 bool SZTOPP=false;
-bool USE_BETA_SIGN=false;
 string MATRIX="";
 string OUTFILE="";
 
@@ -970,7 +933,6 @@ NB:\tMETACARPA currently supports only one header line in input files, which is 
  ("matrix,m", po::value<string>(), "Path to a METACARPA-generated correlation matrix array.")
  ("stop,x", "Stop METACARPA after generating the matrix.")
  ("debug,d", "Toggles an extremely verbose output, for debugging purposes only.")
- ("use-beta-sign", "Use sign of beta for dichotomization in correlation matrix calculation (as described in Southam et al. 2017), instead of the default p-value transform.")
  ("digby-exponent", po::value<double>(), "Exponent used in Digby's tetrachoric correlation approximation: rho = (alpha^e - 1)/(alpha^e + 1). Default: pi/4 = 0.7854.")
 
 
@@ -1064,11 +1026,6 @@ if(vm.count("a2-col")){
 
 if(vm.count("stop")){
   SZTOPP=true;
-}
-
-if(vm.count("use-beta-sign")){
-  USE_BETA_SIGN=true;
-  info("Using sign of beta for dichotomization (Southam et al. 2017 method).");
 }
 
 if(vm.count("digby-exponent")){
@@ -1195,7 +1152,6 @@ int main(int argc, char* argv[])
         if(currentPos[j]==minimum){
           string tempLine;
         //info("j=",j);
-        if(USE_BETA_SIGN){
           long double beta_for_sign = currentBeta[j];
           if(match_a1_pass1==""){
             match_a1_pass1=currentA1[j];
@@ -1206,9 +1162,6 @@ int main(int argc, char* argv[])
             if(VERBOSE){info("First pass allele flip at ",currentPos[j]);}
           }
           correlations.add_minimum_beta(currentPos[j],beta_for_sign,pow(2,j));
-        }else{
-          correlations.add_minimum(currentPos[j],currentPval[j],pow(2,j));
-        }
           if(!getline(*(filestreams[j]), tempLine, '\n')){currentPos[j]="30:1"; info("Read ",counts[j], " lines from file ", ifiles[j],".");eofs[j]=true;continue;}
 
           std::vector <string> line;
