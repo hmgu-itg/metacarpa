@@ -40,6 +40,37 @@ columns have also been corrected: `p_stouffer` is a Stouffer sample-size
 weighted Z-score (not inverse-variance), and `beta`/`se` are derived from the
 IVW method (paired with `p_wald`). Numeric output is unchanged.
 
+### Performance fix: p-value computation restored to long double fast path
+
+The initial v1.3.0 code inadvertently instantiated
+`boost::math::normal_distribution<cpp_dec_float_1000>` on every variant in the
+meta-analysis loop, causing a ~4× runtime regression. The computation has been
+restored to the original `long double` fast path:
+
+1. Attempt `boost::math::normal_distribution<long double>` CDF (fast).
+2. On underflow (`p_corrected == 0`) or exception, fall back to the hand-rolled
+   `normal_survival_asymptotic()` using `cpp_dec_float_1000` arithmetic only for
+   the asymptotic series — no Boost.Math template instantiation in the hot path.
+
+Runtime on 50,000-variant synthetic data is now ~4× faster than the regressed
+code and slightly faster than the original v1.2.0.
+
+### Diagnostics: per-SNP meta-analysis error message
+
+A final catch block now prints a specific error message identifying the SNP and
+the exception when all p-value computation tiers fail, instead of silently
+producing missing output.
+
+### Test suite added
+
+Regression tests have been added to `test_data/`. Run with:
+```bash
+bash test_data/run_tests.sh
+```
+Covers: extreme p-value precision (non-zero output for p = 1e-50 through
+1e-4900), z-score sign consistency with beta, and performance + underflow
+check on 50,000-variant synthetic GWAS data.
+
 ## v1.2.0
 
 ### Breaking change: `--use-beta-sign` removed

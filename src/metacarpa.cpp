@@ -336,14 +336,6 @@ static cpp_dec_float_1000 normal_survival_asymptotic(cpp_dec_float_1000 z){
   return exp(-z2 / 2) * sum / (z * sqrt_2pi);
 }
 
-static cpp_dec_float_1000 normal_two_sided_p(cpp_dec_float_1000 z, long double sd){
-  boost::math::normal_distribution<long double> wald(0.0, 1.0);
-  cpp_dec_float_1000 x = abs(z) / sd;
-  if(x < 8){
-    return 2 * cdf(wald, -1 * x.convert_to<long double>());
-  }
-  return 2 * normal_survival_asymptotic(x);
-}
 
 static cpp_dec_float_1000 z_transform(long double p, long double beta, string rsid){
   boost::math::normal_distribution<long double>  standardnormal(0.0, 1.0);
@@ -832,15 +824,26 @@ inline void meta_analyse(std::vector<string> working_id, std::vector<string> wor
           // compute meta-analysis p-value
     //info("Z=",ord.z);
     //info("ZSE=", ord.zse);
+    boost::math::normal_distribution<long double> correctednormal(0.0, ord.zse);
+    boost::math::normal_distribution<long double> wald(0.0, 1);
     try{
-     ord.p_corrected=normal_two_sided_p(ord.z, ord.zse);
-     ord.p_stouffer=normal_two_sided_p(ord.z, 1);
-     ord.p_wald=normal_two_sided_p((cpp_dec_float_1000)(ord.beta/ord.betase), 1);
-   } catch(exception e){
-    ord.p_corrected=normal_two_sided_p(ord.z, ord.zse);
-    ord.p_wald=normal_two_sided_p((cpp_dec_float_1000)(ord.beta/ord.betase), 1);
-    ord.p_stouffer=normal_two_sided_p(ord.z, 1);
-  }
+      ord.p_corrected = 2 * cdf(correctednormal, -1 * abs(static_cast<long double>(ord.z)));
+      ord.p_stouffer  = 2 * cdf(wald, -1 * abs(static_cast<long double>(ord.z)));
+      ord.p_wald      = 2 * cdf(wald, -1 * abs(ord.beta / ord.betase));
+      if(ord.p_corrected == 0){
+        ord.p_corrected = 2 * normal_survival_asymptotic(abs(ord.z) / ord.zse);
+        ord.p_stouffer  = 2 * normal_survival_asymptotic(abs(ord.z));
+        ord.p_wald      = 2 * normal_survival_asymptotic(abs((cpp_dec_float_1000)(ord.beta / ord.betase)));
+      }
+    } catch(exception &e){
+      try{
+        ord.p_corrected = 2 * normal_survival_asymptotic(abs(ord.z) / ord.zse);
+        ord.p_stouffer  = 2 * normal_survival_asymptotic(abs(ord.z));
+        ord.p_wald      = 2 * normal_survival_asymptotic(abs((cpp_dec_float_1000)(ord.beta / ord.betase)));
+      } catch(exception &e2){
+        std::cerr << "ERROR:\tFor SNP " << ord.rsid << " (" << ord.chrpos << "), meta-analysis failed with message \"" << e2.what() << "\"" << endl;
+      }
+    }
 
 }
 else {

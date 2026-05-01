@@ -17,7 +17,7 @@ make -C src/
 # The Makefile IDIR and LDIR variables must point to your Boost headers and libs
 ```
 
-Compiler flags: `-O3 -std=c++11 -static`. Links against: `boost_program_options`, `boost_serialization`, `pthread`.
+Compiler flags: `-O3 -std=c++14 -static`. Links against: `boost_program_options`, `boost_serialization`, `pthread`.
 
 ## Architecture
 
@@ -45,6 +45,12 @@ The entire implementation lives in a single file: `src/metacarpa.cpp` (~1850 lin
 - Sample sizes can be per-variant (via `--size-col`) or constant (appended to filename: `-I file,N`).
 - The correlation matrix can be precomputed with `-x` (stop after matrix) and reused with `-m` for different traits or chunked data.
 
-## No Test Suite
+## Tests
 
-There is no automated test framework. Validation is done externally via the [metacarpa-simulation](https://bitbucket.org/agilly/metacarpa-simulation) project.
+Regression tests live in `test_data/`. Run all tests with:
+
+```bash
+bash test_data/run_tests.sh
+```
+
+The suite covers: extreme p-value precision (non-zero output for very significant variants), and z-score sign consistency with beta. Broader simulation-based validation is done externally via the [metacarpa-simulation](https://bitbucket.org/agilly/metacarpa-simulation) project.
