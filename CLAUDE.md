@@ -32,7 +32,7 @@ The entire implementation lives in a single file: `src/metacarpa.cpp` (~1850 lin
 - `count_data` struct (nested in `studies_correlation`) — 2x2 contingency tables for tetrachoric correlation.
 - `output_record` struct — Holds per-variant meta-analysis results.
 - `meta_analyse()` — Core computation: inverts correlation submatrix, computes corrected Z-scores and effect sizes.
-- `z_transform()` / `z_transform_fess()` — P-value to Z-score conversion with automatic fallback to `cpp_dec_float<200>` arbitrary precision for extremely small p-values (< ~1e-29).
+- `z_transform()` — P-value to Z-score conversion with sign-of-beta orientation, with automatic precision-tiered fallback for extremely small p-values. Uses `normal_tail_quantile()` at highest precision tier.
 - `InvertMatrix()` — LU-decomposition matrix inversion via Boost uBLAS.
 - `tetrachoric()` — Estimates correlation between studies from binary-transformed p-value vectors.
 
