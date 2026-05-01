@@ -25,6 +25,7 @@
 namespace ublas = boost::numeric::ublas;
 bool VERBOSE=false;
 double DIGBY_EXPONENT=0.7853981633974483; // pi/4
+bool CAP_CORRELATIONS=true;
  /* Matrix inversion routine.
     Uses lu_factorize and lu_substitute in uBLAS to invert a matrix */
  template<class T>
@@ -76,8 +77,7 @@ using namespace boost::multiprecision;
 using namespace std;
 
 typedef number<cpp_dec_float<200> > cpp_dec_float_1000;
-typedef number<cpp_dec_float<500> > cpp_dec_float_mid;
-typedef number<cpp_dec_float<1000> > cpp_dec_float_hi;
+static const cpp_dec_float_1000 MP_PI("3.1415926535897932384626433832795028841971693993751058209749445923078164062862089986280348253421170679");
 
 
 //void info(std::string s){
@@ -271,86 +271,89 @@ static bool sign_beta(long double beta){
 }
 
 
+static cpp_dec_float_1000 normal_survival_series(cpp_dec_float_1000 z){
+  cpp_dec_float_1000 z2 = z * z;
+  cpp_dec_float_1000 inv_z2 = 1 / z2;
+  cpp_dec_float_1000 sum = 1;
+  cpp_dec_float_1000 term = 1;
+
+  for(int k = 1; k < 1000; k++){
+    cpp_dec_float_1000 next = term * (-(2 * k - 1)) * inv_z2;
+    if(abs(next) > abs(term)){
+      break;
+    }
+    term = next;
+    sum += term;
+    if(abs(term) < abs(sum) * cpp_dec_float_1000("1e-190")){
+      break;
+    }
+  }
+
+  return sum;
+}
+
+static cpp_dec_float_1000 normal_log_survival_asymptotic(cpp_dec_float_1000 z){
+  static const cpp_dec_float_1000 log_sqrt_2pi = log(sqrt(2 * MP_PI));
+  return -z * z / 2 - log(z) - log_sqrt_2pi + log(normal_survival_series(z));
+}
+
+static cpp_dec_float_1000 normal_tail_quantile(cpp_dec_float_1000 p){
+  // Acklam's rational approximation for the lower normal quantile.
+  static const cpp_dec_float_1000 c1("-7.784894002430293e-03");
+  static const cpp_dec_float_1000 c2("-3.223964580411365e-01");
+  static const cpp_dec_float_1000 c3("-2.400758277161838e+00");
+  static const cpp_dec_float_1000 c4("-2.549732539343734e+00");
+  static const cpp_dec_float_1000 c5("4.374664141464968e+00");
+  static const cpp_dec_float_1000 c6("2.938163982698783e+00");
+  static const cpp_dec_float_1000 d1("7.784695709041462e-03");
+  static const cpp_dec_float_1000 d2("3.224671290700398e-01");
+  static const cpp_dec_float_1000 d3("2.445134137142996e+00");
+  static const cpp_dec_float_1000 d4("3.754408661907416e+00");
+
+  cpp_dec_float_1000 q = sqrt(-2 * log(p));
+  cpp_dec_float_1000 lower =
+    (((((c1 * q + c2) * q + c3) * q + c4) * q + c5) * q + c6) /
+    ((((d1 * q + d2) * q + d3) * q + d4) * q + 1);
+  cpp_dec_float_1000 z = -lower;
+  cpp_dec_float_1000 log_p = log(p);
+  for(int i = 0; i < 8; i++){
+    cpp_dec_float_1000 diff = normal_log_survival_asymptotic(z) - log_p;
+    if(abs(diff) < cpp_dec_float_1000("1e-80")){
+      break;
+    }
+    z += diff / (z + 1 / z);
+    if(z <= 0){
+      return -lower;
+    }
+  }
+  return z;
+}
+
+static cpp_dec_float_1000 normal_survival_asymptotic(cpp_dec_float_1000 z){
+  static const cpp_dec_float_1000 sqrt_2pi = sqrt(2 * MP_PI);
+  cpp_dec_float_1000 z2 = z * z;
+  cpp_dec_float_1000 sum = normal_survival_series(z);
+  return exp(-z2 / 2) * sum / (z * sqrt_2pi);
+}
+
+static cpp_dec_float_1000 normal_two_sided_p(cpp_dec_float_1000 z, long double sd){
+  boost::math::normal_distribution<long double> wald(0.0, 1.0);
+  cpp_dec_float_1000 x = abs(z) / sd;
+  if(x < 8){
+    return 2 * cdf(wald, -1 * x.convert_to<long double>());
+  }
+  return 2 * normal_survival_asymptotic(x);
+}
+
 static cpp_dec_float_1000 z_transform(long double p, long double beta, string rsid){
   boost::math::normal_distribution<long double>  standardnormal(0.0, 1.0);
-  int sign=beta>0?1:-1;
-  if(p==1) return (cpp_dec_float_1000)1;
+  int sign=beta>=0?1:-1;
+  if(p==1) return (cpp_dec_float_1000)0;
   try {
     return (cpp_dec_float_1000)(quantile(standardnormal, 1-p/2)*sign);
   }catch(exception &ex){
     info("\tPosition ",rsid," could not be transformed with normal machine precision. Using arbitrary precision (p=",p,")");
-    try{
-      boost::math::normal_distribution<cpp_dec_float_1000>  nd(0.0, 1.0);
-      return (cpp_dec_float_1000)(quantile(nd, 1-(cpp_dec_float_1000)p/2)*sign);
-    }catch(exception &ex2){
-      try{
-        boost::math::normal_distribution<cpp_dec_float_mid>  nd(0.0, 1.0);
-        return (cpp_dec_float_1000)(quantile(nd, 1-(cpp_dec_float_mid)p/2)*sign);
-      }catch(exception &ex3){
-        try{
-          boost::math::normal_distribution<cpp_dec_float_hi>  nd(0.0, 1.0);
-          return (cpp_dec_float_1000)(quantile(nd, 1-(cpp_dec_float_hi)p/2)*sign);
-        }catch(exception &ex4){
-          info("\tPosition ",rsid," overflows all precision tiers. Capping z-score at +/-38.");
-          return (cpp_dec_float_1000)(38.0)*sign;
-        }
-      }
-    }
-  }
-}
-
-static cpp_dec_float_1000 z_transform_fess(long double p, long double beta, string rsid){
-  boost::math::normal_distribution<long double>  standardnormal(0.0, 1.0);
-  int sign=beta>=0?1:-1;
-  if(p==1) return (cpp_dec_float_1000)1;
-  try {
-    return (cpp_dec_float_1000)(quantile(standardnormal, p/2)*sign);
-  }catch(exception &ex){
-    info("\tPosition ",rsid," could not be transformed with normal machine precision. Using arbitrary precision (p=",p,")");
-    try{
-      boost::math::normal_distribution<cpp_dec_float_1000>  nd(0.0, 1.0);
-      return (cpp_dec_float_1000)(quantile(nd, (cpp_dec_float_1000)p/2)*sign);
-    }catch(exception &ex2){
-      try{
-        boost::math::normal_distribution<cpp_dec_float_mid>  nd(0.0, 1.0);
-        return (cpp_dec_float_1000)(quantile(nd, (cpp_dec_float_mid)p/2)*sign);
-      }catch(exception &ex3){
-        try{
-          boost::math::normal_distribution<cpp_dec_float_hi>  nd(0.0, 1.0);
-          return (cpp_dec_float_1000)(quantile(nd, (cpp_dec_float_hi)p/2)*sign);
-        }catch(exception &ex4){
-          info("\tPosition ",rsid," overflows all precision tiers. Capping z-score at +/-38.");
-          return (cpp_dec_float_1000)(-38.0)*sign;
-        }
-      }
-    }
-  }
-}
-
-static cpp_dec_float_1000 z_transform(long double p, string rsid){
-  boost::math::normal_distribution<long double>  standardnormal(0.0, 1.0);
-  if(p==1) return (cpp_dec_float_1000)1;
-  try {
-    return (cpp_dec_float_1000)(quantile(standardnormal, 1-p));
-  }catch(exception &ex){
-    info("\tPosition ",rsid," could not be transformed with normal machine precision. Using arbitrary precision (p=",p,")");
-    try{
-      boost::math::normal_distribution<cpp_dec_float_1000>  nd(0.0, 1.0);
-      return (cpp_dec_float_1000)(quantile(nd, 1-(cpp_dec_float_1000)p));
-    }catch(exception &ex2){
-      try{
-        boost::math::normal_distribution<cpp_dec_float_mid>  nd(0.0, 1.0);
-        return (cpp_dec_float_1000)(quantile(nd, 1-(cpp_dec_float_mid)p));
-      }catch(exception &ex3){
-        try{
-          boost::math::normal_distribution<cpp_dec_float_hi>  nd(0.0, 1.0);
-          return (cpp_dec_float_1000)(quantile(nd, 1-(cpp_dec_float_hi)p));
-        }catch(exception &ex4){
-          info("\tPosition ",rsid," overflows all precision tiers.");
-          return (cpp_dec_float_1000)(38.0);
-        }
-      }
-    }
+    return normal_tail_quantile((cpp_dec_float_1000)p / 2) * sign;
   }
 }
 
@@ -632,6 +635,7 @@ public:
           if(VERBOSE){info("between study ",i,"and",j, " the alpha is ",alpha);}
           correlations[mask](i,j)=(pow(alpha, DIGBY_EXPONENT)-1)/(pow(alpha, DIGBY_EXPONENT)+1);
           if(correlations[mask](i,j)==-1){correlations[mask](i,j)=0;}
+          if(CAP_CORRELATIONS && correlations[mask](i,j)<0){correlations[mask](i,j)=0;}
         }
       }
       //info(correlations[mask]);
@@ -689,12 +693,10 @@ struct output_record
   long double beta;
   long double betase;
   cpp_dec_float_1000 z;
-  cpp_dec_float_1000 z_fess;
   long double zse;
-  cpp_dec_float_1000 p;
+  cpp_dec_float_1000 p_corrected;
   cpp_dec_float_1000 p_wald;
-  cpp_dec_float_1000 p_uncorrected;
-  cpp_dec_float_1000 p_fess;
+  cpp_dec_float_1000 p_stouffer;
   float af;
   string a1;
   string a2;
@@ -708,7 +710,7 @@ struct output_record
     // assumes that ofs is open in text append mode. If not, horrible things will happen.
     if(!ofs.is_open()){error("Internal: output file is not open.");exit(1);}
     string s(status.begin(), status.end());
-    ofs  << rsid <<"\t"+chrpos+"\t" <<a1<<"\t"<<a2<<"\t"<< af  << "\t"+s+"\t" << beta<<"\t"<<betase<<"\t"<<z<<"\t"<<zse<<"\t"<<p_wald<<"\t"<<p<<"\t"<<p_fess<<"\t"<<size<<"\n";
+    ofs  << rsid <<"\t"+chrpos+"\t" <<a1<<"\t"<<a2<<"\t"<< af  << "\t"+s+"\t" << beta<<"\t"<<betase<<"\t"<<z<<"\t"<<zse<<"\t"<<p_wald<<"\t"<<p_corrected<<"\t"<<p_stouffer<<"\t"<<size<<"\n";
   }
 
 };
@@ -781,18 +783,13 @@ inline void meta_analyse(std::vector<string> working_id, std::vector<string> wor
       // compute transforms and sum thereof
     i=0;
     vector<cpp_dec_float_1000> zs(working_weights.size());
-    vector<cpp_dec_float_1000> zs_fess(working_weights.size());
     for(long double l : working_ps){
-      zs[i]=z_transform_fess(working_ps[i], working_betas[i],working_rs[i]);
-      zs_fess[i]=z_transform_fess(working_ps[i], working_betas[i],working_rs[i]);
+      zs[i]=z_transform(working_ps[i], working_betas[i],working_rs[i]);
       i++;
     }
     ord.z=somme(produit(zs, working_weights));
 
-        if(VERBOSE){info("(=",ord.z,")Computing uncorrected meta-analysis statistic.");}
-
-    ord.z_fess=somme(produit(zs_fess, working_weights));
-        if(VERBOSE){info("(=",ord.z_fess,")Computing SE.");    cout << "\nGot working_weights=" ;
+        if(VERBOSE){info("(=",ord.z,")Computing SE.");    cout << "\nGot working_weights=" ;
     for (auto i: working_weights)
       std::cout << i << ' ';}
 
@@ -835,25 +832,14 @@ inline void meta_analyse(std::vector<string> working_id, std::vector<string> wor
           // compute meta-analysis p-value
     //info("Z=",ord.z);
     //info("ZSE=", ord.zse);
-    boost::math::normal_distribution<long double>  correctednormal(0.0, ord.zse);
-    boost::math::normal_distribution<cpp_dec_float_1000>  correctednormal_p(0.0, ord.zse);
-    boost::math::normal_distribution<long double>  wald(0.0, 1);
-    boost::math::normal_distribution<cpp_dec_float_1000>  wald_p(0.0, 1);
-
     try{
-     ord.p=2*(cdf(correctednormal, -1*abs(static_cast<long double>(ord.z))));
-     ord.p_fess=2*cdf(wald, -1*abs(static_cast<long double>(ord.z_fess)));
-     ord.p_wald=2*cdf(wald, -1*abs(ord.beta/ord.betase));
-     if(ord.p==0){
-       ord.p_wald=2*cdf(wald_p, -1*abs(ord.beta/ord.betase));
-       ord.p=2*(cdf(correctednormal_p, -1*abs(ord.z)));
-       ord.p_fess=2*cdf(wald_p, -1*abs(ord.z_fess));
-
-     }
+     ord.p_corrected=normal_two_sided_p(ord.z, ord.zse);
+     ord.p_stouffer=normal_two_sided_p(ord.z, 1);
+     ord.p_wald=normal_two_sided_p((cpp_dec_float_1000)(ord.beta/ord.betase), 1);
    } catch(exception e){
-    ord.p=2*(cdf(correctednormal, -1*abs(ord.z.convert_to<long double>())));
-    ord.p_wald=2*cdf(wald_p, -1*abs(ord.beta/ord.betase));
-    ord.p_fess=2*cdf(wald_p, -1*abs(ord.z_fess));
+    ord.p_corrected=normal_two_sided_p(ord.z, ord.zse);
+    ord.p_wald=normal_two_sided_p((cpp_dec_float_1000)(ord.beta/ord.betase), 1);
+    ord.p_stouffer=normal_two_sided_p(ord.z, 1);
   }
 
 }
@@ -862,12 +848,11 @@ else {
   ord.rsid=working_id[0];
   ord.beta=working_betas[0];
   ord.betase=working_betase[0];
-  ord.p=-1;
+  ord.p_corrected=-1;
   ord.p_wald=working_ps[0];
-  ord.p_fess=-1;
+  ord.p_stouffer=-1;
   ord.z=-1;
   ord.zse=-1;
-  ord.p_uncorrected=-1;
   ord.a1=working_a1[0];
   ord.a2=working_a2[0];
   ord.size=working_weights[0];
@@ -934,6 +919,7 @@ NB:\tMETACARPA currently supports only one header line in input files, which is 
  ("stop,x", "Stop METACARPA after generating the matrix.")
  ("debug,d", "Toggles an extremely verbose output, for debugging purposes only.")
  ("digby-exponent", po::value<double>(), "Exponent used in Digby's tetrachoric correlation approximation: rho = (alpha^e - 1)/(alpha^e + 1). Default: pi/4 = 0.7854.")
+ ("no-cap-correlations", "Disable capping of negative off-diagonal correlation estimates to 0. By default, negative correlations (which arise from sampling noise when true overlap is near zero) are clamped to 0 to avoid anti-conservative p-values.")
 
 
   //    ("ss1,1", po::value<int>(), "Sample size for study 1 (in order of join).")
@@ -1028,6 +1014,11 @@ if(vm.count("stop")){
   SZTOPP=true;
 }
 
+if(vm.count("no-cap-correlations")){
+  CAP_CORRELATIONS=false;
+  info("Correlation capping disabled: negative off-diagonal correlations will be used as-is.");
+}
+
 if(vm.count("digby-exponent")){
   DIGBY_EXPONENT=vm["digby-exponent"].as<double>();
   info("Using Digby exponent = "+to_string(DIGBY_EXPONENT));
@@ -1071,7 +1062,10 @@ int main(int argc, char* argv[])
 {
   // this performs argument parsing
 
-  initialise(argc, argv);
+  int init_status=initialise(argc, argv);
+  if(init_status != 0){
+    return init_status == 1 ? 0 : init_status;
+  }
   // open all files simultaneously, put them in an array
   
   std::vector<unique_ptr<ifstream>> filestreams;
@@ -1319,6 +1313,14 @@ int main(int argc, char* argv[])
   ofstream ofs (OUTFILE, ios::out | ios::app);
 
   // Write headers
+  // Three meta-analysis p-values are reported per variant:
+  //   p_wald      : Wald test from inverse-variance weighted (IVW) beta/SE (Lin & Sullivan 2009).
+  //                 beta and se columns are derived from this method.
+  //   p_corrected : Province & Borecki (2013) corrected Stouffer Z-score, accounting for
+  //                 inter-study sample overlap via the tetrachoric correlation matrix.
+  //                 This is the primary METACARPA result.
+  //   p_stouffer  : Naive Stouffer sample-size weighted Z-score (sqrt(Ni/N_total) weights, SD=1).
+  //                 Ignores sample overlap; useful as a baseline for comparison only.
   ofs<<"rsid\tchr:pos\teffect_allele\tneffect_allele\teffect_allele_frequency\teffects\tbeta\tse\tz\tz_se\tp_wald\tp_corrected\tp_stouffer\tn\n";
   poscount=0;
   while(1){

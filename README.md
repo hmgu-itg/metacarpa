@@ -101,13 +101,13 @@ METACARPA produces an output with the following columns:
 * **neffect_allele** : Non-effect allele.
 * **effect_allele_frequency** : Total effect allele frequency.
 * **effects** : Summary of directions of effect across files.
-* **beta** : Meta-analysis Effect.
-* **se** : Meta-analysis Standard error.
-* **z** : Meta-analysis Z-score.
-* **zse** : Standard error of the z-score.
-* **p_wald** : Corrected p-value from the effect-size based meta-analysis. This is the preferred p-value to use.
-* **p** : Corrected p-value from the p-value based meta-analysis. This is the adapted p-value from Province and Borecki (2013).
-* **p_fess** : Fixed effects inverse variance based p-value. This is an ** _uncorrected_ ** p-value and should be used only for comparison purposes.
+* **beta** : Meta-analysis effect size from the inverse-variance weighted (IVW) meta-analysis (Lin & Sullivan 2009). Paired with `p_wald`.
+* **se** : Standard error of the IVW meta-analysis effect size. Paired with `p_wald`.
+* **z** : Stouffer sample-size weighted combined Z-score: Σ sqrt(Ni/N_total) × Zi.
+* **zse** : Standard error of `z`, accounting for inter-study sample overlap via the tetrachoric correlation matrix.
+* **p_wald** : Corrected p-value from the IVW effect-size meta-analysis (Wald test: beta/se). Accounts for sample overlap. This is the preferred p-value to use.
+* **p_corrected** : Corrected p-value from the p-value based meta-analysis (Province & Borecki 2013): the Stouffer Z-score `z` divided by `zse`. Accounts for sample overlap.
+* **p_stouffer** : Naive Stouffer sample-size weighted p-value (`z` with SD=1). Does **not** account for sample overlap. Use only as a baseline for comparison.
 * **size** * : Total sample size for this variant
  
 ## Allele formatting
