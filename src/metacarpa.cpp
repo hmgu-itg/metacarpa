@@ -781,18 +781,12 @@ inline void meta_analyse(std::vector<string> working_id, std::vector<string> wor
       // compute transforms and sum thereof
     i=0;
     vector<cpp_dec_float_1000> zs(working_weights.size());
-    vector<cpp_dec_float_1000> zs_fess(working_weights.size());
     for(long double l : working_ps){
       zs[i]=z_transform_fess(working_ps[i], working_betas[i],working_rs[i]);
-      zs_fess[i]=z_transform_fess(working_ps[i], working_betas[i],working_rs[i]);
       i++;
     }
     ord.z=somme(produit(zs, working_weights));
-
-        if(VERBOSE){info("(=",ord.z,")Computing uncorrected meta-analysis statistic.");}
-
-    ord.z_fess=somme(produit(zs_fess, working_weights));
-        if(VERBOSE){info("(=",ord.z_fess,")Computing SE.");    cout << "\nGot working_weights=" ;
+        if(VERBOSE){info("(=",ord.z,")Computing SE.");    cout << "\nGot working_weights=" ;
     for (auto i: working_weights)
       std::cout << i << ' ';}
 
@@ -842,18 +836,18 @@ inline void meta_analyse(std::vector<string> working_id, std::vector<string> wor
 
     try{
      ord.p=2*(cdf(correctednormal, -1*abs(static_cast<long double>(ord.z))));
-     ord.p_fess=2*cdf(wald, -1*abs(static_cast<long double>(ord.z_fess)));
+     ord.p_fess=2*cdf(wald, -1*abs(static_cast<long double>(ord.z)));
      ord.p_wald=2*cdf(wald, -1*abs(ord.beta/ord.betase));
      if(ord.p==0){
        ord.p_wald=2*cdf(wald_p, -1*abs(ord.beta/ord.betase));
        ord.p=2*(cdf(correctednormal_p, -1*abs(ord.z)));
-       ord.p_fess=2*cdf(wald_p, -1*abs(ord.z_fess));
+       ord.p_fess=2*cdf(wald_p, -1*abs(ord.z));
 
      }
    } catch(exception e){
     ord.p=2*(cdf(correctednormal, -1*abs(ord.z.convert_to<long double>())));
     ord.p_wald=2*cdf(wald_p, -1*abs(ord.beta/ord.betase));
-    ord.p_fess=2*cdf(wald_p, -1*abs(ord.z_fess));
+    ord.p_fess=2*cdf(wald_p, -1*abs(ord.z));
   }
 
 }
