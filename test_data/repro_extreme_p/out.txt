@@ -1,2 +1,0 @@
-rsid	chr:pos	effect_allele	neffect_allele	effect_allele_frequency	effects	beta	se	z	z_se	p_wald	p_corrected	p_stouffer	n
-chr1:1000:A:G	1:1000	A	G	0.4	++	1	0.00707107	95.8779	1	6.40596e-4346	6.01022e-1999	6.01022e-1999	2000
