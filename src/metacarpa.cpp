@@ -1313,6 +1313,14 @@ int main(int argc, char* argv[])
   ofstream ofs (OUTFILE, ios::out | ios::app);
 
   // Write headers
+  // Three meta-analysis p-values are reported per variant:
+  //   p_wald      : Wald test from inverse-variance weighted (IVW) beta/SE (Lin & Sullivan 2009).
+  //                 beta and se columns are derived from this method.
+  //   p_corrected : Province & Borecki (2013) corrected Stouffer Z-score, accounting for
+  //                 inter-study sample overlap via the tetrachoric correlation matrix.
+  //                 This is the primary METACARPA result.
+  //   p_stouffer  : Naive Stouffer sample-size weighted Z-score (sqrt(Ni/N_total) weights, SD=1).
+  //                 Ignores sample overlap; useful as a baseline for comparison only.
   ofs<<"rsid\tchr:pos\teffect_allele\tneffect_allele\teffect_allele_frequency\teffects\tbeta\tse\tz\tz_se\tp_wald\tp_corrected\tp_stouffer\tn\n";
   poscount=0;
   while(1){
