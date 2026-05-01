@@ -1,5 +1,45 @@
 # Changelog
 
+## v1.3.0
+
+### Bug fix: z-score sign opposite to beta
+
+The internal z-score used for weighted combination had its sign flipped relative
+to the corresponding beta. The function `z_transform_fess()` was computing
+`Phi^{-1}(p/2) * sign(beta)`, which returns the lower-tail quantile — always
+negative — and therefore the opposite sign from `beta`. The correct formula is
+`Phi^{-1}(1 - p/2) * sign(beta)` (upper-tail quantile). The displayed `z`
+column in the output was therefore sign-inconsistent with `beta` for all
+meta-analysed variants.
+
+P-values were unaffected (computed from `|z|`), but the `z` output column and
+any downstream use of it were wrong.
+
+Credit: Brady Ryan (University of Michigan) identified this bug.
+
+### Bug fix: negative correlation estimates clamped to zero
+
+Tetrachoric correlation estimates for near-zero overlap could come out slightly
+negative due to sampling noise. A negative off-diagonal entry in the correlation
+matrix makes `zse < 1`, producing anti-conservative corrected p-values, and can
+also make the variance-covariance matrix for beta non-positive-definite.
+
+Negative off-diagonal correlations are now clamped to 0 by default. The original
+behaviour can be restored with `--no-cap-correlations`.
+
+### Build: upgraded to C++14
+
+The Makefile now uses `-std=c++14`. Boost ≥ 1.82 emits a deprecation warning
+when compiled under C++11; C++14 silences it. No source changes were required.
+
+### Output column names clarified
+
+The output column formerly named `p` is now `p_corrected`, and the column
+formerly named `p_fess` is now `p_stouffer`. The README descriptions of these
+columns have also been corrected: `p_stouffer` is a Stouffer sample-size
+weighted Z-score (not inverse-variance), and `beta`/`se` are derived from the
+IVW method (paired with `p_wald`). Numeric output is unchanged.
+
 ## v1.2.0
 
 ### Breaking change: `--use-beta-sign` removed

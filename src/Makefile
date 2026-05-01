@@ -5,7 +5,7 @@ CC=c++
 #LDIR=/nfs/users/nfs_a/ag15/boost_1_55_0/stage/lib
 #LDIR=/nfs/team144/software/boost_1.6/boost_1_60_0/stage/lib
 LDIR=lib
-CFLAGS=-O3 -std=c++11 -I$(IDIR) -L$(LDIR)
+CFLAGS=-O3 -std=c++14 -I$(IDIR) -L$(LDIR)
 LIBS=-lboost_program_options -lboost_serialization -lpthread
 
 metacapa: metacarpa.cpp
