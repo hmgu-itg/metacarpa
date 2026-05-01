@@ -694,10 +694,9 @@ struct output_record
   long double betase;
   cpp_dec_float_1000 z;
   long double zse;
-  cpp_dec_float_1000 p;
+  cpp_dec_float_1000 p_corrected;
   cpp_dec_float_1000 p_wald;
-  cpp_dec_float_1000 p_uncorrected;
-  cpp_dec_float_1000 p_fess;
+  cpp_dec_float_1000 p_stouffer;
   float af;
   string a1;
   string a2;
@@ -711,7 +710,7 @@ struct output_record
     // assumes that ofs is open in text append mode. If not, horrible things will happen.
     if(!ofs.is_open()){error("Internal: output file is not open.");exit(1);}
     string s(status.begin(), status.end());
-    ofs  << rsid <<"\t"+chrpos+"\t" <<a1<<"\t"<<a2<<"\t"<< af  << "\t"+s+"\t" << beta<<"\t"<<betase<<"\t"<<z<<"\t"<<zse<<"\t"<<p_wald<<"\t"<<p<<"\t"<<p_fess<<"\t"<<size<<"\n";
+    ofs  << rsid <<"\t"+chrpos+"\t" <<a1<<"\t"<<a2<<"\t"<< af  << "\t"+s+"\t" << beta<<"\t"<<betase<<"\t"<<z<<"\t"<<zse<<"\t"<<p_wald<<"\t"<<p_corrected<<"\t"<<p_stouffer<<"\t"<<size<<"\n";
   }
 
 };
@@ -834,13 +833,13 @@ inline void meta_analyse(std::vector<string> working_id, std::vector<string> wor
     //info("Z=",ord.z);
     //info("ZSE=", ord.zse);
     try{
-     ord.p=normal_two_sided_p(ord.z, ord.zse);
-     ord.p_fess=normal_two_sided_p(ord.z, 1);
+     ord.p_corrected=normal_two_sided_p(ord.z, ord.zse);
+     ord.p_stouffer=normal_two_sided_p(ord.z, 1);
      ord.p_wald=normal_two_sided_p((cpp_dec_float_1000)(ord.beta/ord.betase), 1);
    } catch(exception e){
-    ord.p=normal_two_sided_p(ord.z, ord.zse);
+    ord.p_corrected=normal_two_sided_p(ord.z, ord.zse);
     ord.p_wald=normal_two_sided_p((cpp_dec_float_1000)(ord.beta/ord.betase), 1);
-    ord.p_fess=normal_two_sided_p(ord.z, 1);
+    ord.p_stouffer=normal_two_sided_p(ord.z, 1);
   }
 
 }
@@ -849,12 +848,11 @@ else {
   ord.rsid=working_id[0];
   ord.beta=working_betas[0];
   ord.betase=working_betase[0];
-  ord.p=-1;
+  ord.p_corrected=-1;
   ord.p_wald=working_ps[0];
-  ord.p_fess=-1;
+  ord.p_stouffer=-1;
   ord.z=-1;
   ord.zse=-1;
-  ord.p_uncorrected=-1;
   ord.a1=working_a1[0];
   ord.a2=working_a2[0];
   ord.size=working_weights[0];
